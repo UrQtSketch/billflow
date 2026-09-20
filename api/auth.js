@@ -1,10 +1,11 @@
 const { hashPassword, verifyPassword, generateToken, getAuthUser, serializeAuthCookie, clearAuthCookie } = require('./_lib/auth');
 const { getPool, query, initSchema, memoryStore } = require('./_lib/db');
-const { sendJson, sendError } = require('./_lib/response');
+const { sendJson, sendError, getQueryParams } = require('./_lib/response');
 const crypto = require('crypto');
 
 module.exports = async function handler(req, res) {
-  const action = (req.query?.action || '').toLowerCase();
+  const queryParams = getQueryParams(req);
+  const action = (queryParams.action || '').toLowerCase();
   const pool = getPool();
   if (pool) await initSchema();
 

@@ -1,6 +1,6 @@
 const { getAuthUser } = require('./_lib/auth');
 const { getPool, query, initSchema, memoryStore } = require('./_lib/db');
-const { sendJson, sendError } = require('./_lib/response');
+const { sendJson, sendError, getQueryParams } = require('./_lib/response');
 const crypto = require('crypto');
 
 module.exports = async function handler(req, res) {
@@ -12,7 +12,8 @@ module.exports = async function handler(req, res) {
   const pool = getPool();
   if (pool) await initSchema();
 
-  const id = req.query?.id;
+  const queryParams = getQueryParams(req);
+  const id = queryParams.id;
 
   // GET: List all or single detail
   if (req.method === 'GET') {

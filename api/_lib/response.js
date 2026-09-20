@@ -1,6 +1,19 @@
 /**
- * Standard API Response Helpers
+ * Standard API Response & Request Helpers
  */
+
+function getQueryParams(req) {
+  try {
+    const url = new URL(req.url, 'http://localhost');
+    const params = {};
+    for (const [key, value] of url.searchParams.entries()) {
+      params[key] = value;
+    }
+    return { ...params, ...(req.query || {}) };
+  } catch (e) {
+    return req.query || {};
+  }
+}
 
 function sendJson(res, statusCode, data) {
   res.statusCode = statusCode;
@@ -17,6 +30,7 @@ function sendError(res, statusCode, message, details = null) {
 }
 
 module.exports = {
+  getQueryParams,
   sendJson,
   sendError
 };

@@ -1,12 +1,13 @@
 const { getAuthUser, verifyBusinessAccess } = require('./_lib/auth');
 const { getPool, query, initSchema, memoryStore } = require('./_lib/db');
-const { sendJson, sendError } = require('./_lib/response');
+const { sendJson, sendError, getQueryParams } = require('./_lib/response');
 
 module.exports = async function handler(req, res) {
   const authUser = getAuthUser(req);
   if (!authUser) return sendError(res, 401, 'Unauthorized — Please log in');
 
-  const businessId = req.query?.businessId || authUser.activeBusinessId;
+  const queryParams = getQueryParams(req);
+  const businessId = queryParams.businessId || authUser.activeBusinessId;
   if (!businessId) return sendError(res, 400, 'Business ID is required');
 
   const hasAccess = await verifyBusinessAccess(authUser.userId, businessId);
