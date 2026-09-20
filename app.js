@@ -2169,13 +2169,59 @@
       const badge = document.getElementById('auth-user-badge');
       const nameEl = document.getElementById('user-display-name');
 
-      if (user) {
+      if (user && business) {
         if (btnAuth) btnAuth.style.display = 'none';
         if (badge) badge.style.display = 'flex';
         if (nameEl) nameEl.textContent = `👤 ${user.fullName || user.email}`;
+
+        // Switch to authenticated user's business profile
+        const userProfiles = (businesses && businesses.length > 0)
+          ? businesses.map(b => ({ id: b.id, name: b.name }))
+          : [{ id: business.id, name: business.name }];
+        Store.saveProfiles(userProfiles);
+
+        currentProfile = business.id;
+        localStorage.setItem('billflow_active_profile', business.id);
+
+        // Ensure clean, fresh isolated storage for this user's business
+        if (!localStorage.getItem(storageKey('settings'))) {
+          localStorage.setItem(storageKey('settings'), JSON.stringify({
+            businessName: business.name || `${user.fullName}'s Business`,
+            ownerName: business.owner_name || user.fullName || '',
+            phone: business.phone || '',
+            address: business.address || '',
+            gstin: business.gstin || '',
+            invoicePrefix: business.invoice_prefix || 'INV-',
+            nextNumber: business.next_number || 1001,
+            currency: business.currency || '₹'
+          }));
+        }
+        if (!localStorage.getItem(storageKey('products'))) {
+          localStorage.setItem(storageKey('products'), JSON.stringify([]));
+        }
+        if (!localStorage.getItem(storageKey('customers'))) {
+          localStorage.setItem(storageKey('customers'), JSON.stringify([]));
+        }
+        if (!localStorage.getItem(storageKey('invoices'))) {
+          localStorage.setItem(storageKey('invoices'), JSON.stringify([]));
+        }
+
+        // Refresh all UI views to reflect the authenticated business data
+        if (typeof SettingsController !== 'undefined' && SettingsController.refreshAllDataViews) {
+          SettingsController.renderProfileDropdown();
+          SettingsController.refreshAllDataViews();
+        }
       } else {
         if (btnAuth) btnAuth.style.display = 'inline-block';
         if (badge) badge.style.display = 'none';
+
+        // Reset to default clean state on logout
+        currentProfile = DEFAULT_PROFILE;
+        localStorage.setItem('billflow_active_profile', DEFAULT_PROFILE);
+        if (typeof SettingsController !== 'undefined' && SettingsController.refreshAllDataViews) {
+          SettingsController.renderProfileDropdown();
+          SettingsController.refreshAllDataViews();
+        }
       }
     },
 
@@ -2302,6 +2348,8 @@
       this.checkSession();
     }
   };
+
+  window.AuthController = AuthController;
 
   // --- BOOTSTRAP APP ON DOM READY ---
   document.addEventListener('DOMContentLoaded', () => {
