@@ -7,6 +7,100 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- AUTHENTICATION & LANDING OVERLAY -->
+  <div class="auth-overlay" id="auth-overlay">
+    <div class="auth-container">
+      <div class="auth-hero">
+        <div>
+          <div class="auth-brand">
+            <div class="logo">B</div>
+            <span>BillFlow</span>
+          </div>
+          <h2>Simple, fast & modern billing for your business.</h2>
+          <p class="auth-subtitle">Create professional GST invoices, manage products, track customer balances, and export A4 invoices with zero hassle.</p>
+        </div>
+
+        <div class="auth-features">
+          <div class="auth-feat-item">
+            <span class="feat-icon">⚡</span>
+            <div>
+              <strong>Multi-Device Access</strong>
+              <span>Manage your business invoices safely from your phone, laptop, or tablet.</span>
+            </div>
+          </div>
+          <div class="auth-feat-item">
+            <span class="feat-icon">🔒</span>
+            <div>
+              <strong>Private & Isolated</strong>
+              <span>Every business workspace starts completely clean from ₹0.00.</span>
+            </div>
+          </div>
+          <div class="auth-feat-item">
+            <span class="feat-icon">🖨️</span>
+            <div>
+              <strong>Instant PDF & Print</strong>
+              <span>Clean A4 formatted invoices with custom discounts and GST.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="auth-card">
+        <div class="auth-switch">
+          <button type="button" class="auth-tab-btn active" id="overlay-tab-login">Log In</button>
+          <button type="button" class="auth-tab-btn" id="overlay-tab-signup">Create Account</button>
+        </div>
+
+        <!-- Overlay Login Form -->
+        <form id="overlay-form-login" class="auth-form active">
+          <div class="auth-form-header">
+            <h3>Welcome Back</h3>
+            <p class="muted">Enter your email and password to open your workspace.</p>
+          </div>
+          <div class="field">
+            <label>EMAIL ADDRESS</label>
+            <input type="email" id="overlay-login-email" required placeholder="owner@business.com" autocomplete="email">
+          </div>
+          <div class="field">
+            <label>PASSWORD</label>
+            <input type="password" id="overlay-login-password" required placeholder="••••••••" autocomplete="current-password">
+          </div>
+          <button type="submit" class="btn primary auth-submit-btn" id="overlay-btn-login">Log In to Workspace →</button>
+        </form>
+
+        <!-- Overlay Signup Form -->
+        <form id="overlay-form-signup" class="auth-form">
+          <div class="auth-form-header">
+            <h3>Create Your Workspace</h3>
+            <p class="muted">Start managing invoices with a clean, private business account.</p>
+          </div>
+          <div class="field">
+            <label>YOUR FULL NAME</label>
+            <input type="text" id="overlay-signup-name" required placeholder="e.g. Rahul Sharma">
+          </div>
+          <div class="field">
+            <label>BUSINESS / SHOP NAME</label>
+            <input type="text" id="overlay-signup-biz" required placeholder="e.g. Apex Retailers & Co.">
+          </div>
+          <div class="field">
+            <label>EMAIL ADDRESS</label>
+            <input type="email" id="overlay-signup-email" required placeholder="owner@business.com">
+          </div>
+          <div class="field">
+            <label>PASSWORD (MIN 6 CHARS)</label>
+            <input type="password" id="overlay-signup-password" minlength="6" required placeholder="••••••••">
+          </div>
+          <button type="submit" class="btn primary auth-submit-btn" id="overlay-btn-signup">Create Account & Enter →</button>
+        </form>
+
+        <div class="auth-card-footer">
+          <span class="muted">Want to explore first?</span>
+          <button type="button" class="link-btn" id="btn-demo-mode">Explore Demo / Guest Mode</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="app">
     <!-- Sidebar Navigation -->
     <aside class="sidebar" id="sidebar">

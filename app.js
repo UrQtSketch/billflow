@@ -2168,8 +2168,10 @@
       const btnAuth = document.getElementById('btn-open-auth');
       const badge = document.getElementById('auth-user-badge');
       const nameEl = document.getElementById('user-display-name');
+      const overlay = document.getElementById('auth-overlay');
 
       if (user && business) {
+        if (overlay) overlay.classList.add('hidden');
         if (btnAuth) btnAuth.style.display = 'none';
         if (badge) badge.style.display = 'flex';
         if (nameEl) nameEl.textContent = `👤 ${user.fullName || user.email}`;
@@ -2212,6 +2214,7 @@
           SettingsController.refreshAllDataViews();
         }
       } else {
+        if (overlay) overlay.classList.remove('hidden');
         if (btnAuth) btnAuth.style.display = 'inline-block';
         if (badge) badge.style.display = 'none';
 
@@ -2226,6 +2229,13 @@
     },
 
     init() {
+      const overlay = document.getElementById('auth-overlay');
+      const overlayTabLogin = document.getElementById('overlay-tab-login');
+      const overlayTabSignup = document.getElementById('overlay-tab-signup');
+      const overlayFormLogin = document.getElementById('overlay-form-login');
+      const overlayFormSignup = document.getElementById('overlay-form-signup');
+      const btnDemoMode = document.getElementById('btn-demo-mode');
+
       const btnOpenAuth = document.getElementById('btn-open-auth');
       const tabLogin = document.getElementById('tab-auth-login');
       const tabSignup = document.getElementById('tab-auth-signup');
@@ -2233,6 +2243,104 @@
       const formSignup = document.getElementById('form-signup');
       const btnLogout = document.getElementById('btn-logout');
 
+      // Overlay tab switching
+      if (overlayTabLogin && overlayTabSignup) {
+        overlayTabLogin.addEventListener('click', () => {
+          overlayTabLogin.classList.add('active');
+          overlayTabSignup.classList.remove('active');
+          if (overlayFormLogin) overlayFormLogin.classList.add('active');
+          if (overlayFormSignup) overlayFormSignup.classList.remove('active');
+        });
+
+        overlayTabSignup.addEventListener('click', () => {
+          overlayTabSignup.classList.add('active');
+          overlayTabLogin.classList.remove('active');
+          if (overlayFormSignup) overlayFormSignup.classList.add('active');
+          if (overlayFormLogin) overlayFormLogin.classList.remove('active');
+        });
+      }
+
+      // Guest / Demo mode explorer
+      if (btnDemoMode) {
+        btnDemoMode.addEventListener('click', () => {
+          if (overlay) overlay.classList.add('hidden');
+          Toast.show('Entered Demo Workspace. Create an account anytime to save your data safely.', 'info');
+        });
+      }
+
+      // Overlay Login submit
+      if (overlayFormLogin) {
+        overlayFormLogin.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const email = document.getElementById('overlay-login-email').value.trim();
+          const password = document.getElementById('overlay-login-password').value;
+          const submitBtn = document.getElementById('overlay-btn-login');
+
+          try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Logging in...';
+
+            const res = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+              Toast.show(`Welcome back, ${data.user.fullName || data.user.email}!`, 'success');
+              this.setSession(data.user, data.business, data.businesses);
+              overlayFormLogin.reset();
+            } else {
+              Toast.show(data.error || 'Login failed', 'error');
+            }
+          } catch (err) {
+            Toast.show('Network error logging in', 'error');
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Log In to Workspace →';
+          }
+        });
+      }
+
+      // Overlay Signup submit
+      if (overlayFormSignup) {
+        overlayFormSignup.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const fullName = document.getElementById('overlay-signup-name').value.trim();
+          const businessName = document.getElementById('overlay-signup-biz').value.trim();
+          const email = document.getElementById('overlay-signup-email').value.trim();
+          const password = document.getElementById('overlay-signup-password').value;
+          const submitBtn = document.getElementById('overlay-btn-signup');
+
+          try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating account...';
+
+            const res = await fetch('/api/auth/signup', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fullName, businessName, email, password })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+              Toast.show('Account created successfully! Welcome to BillFlow.', 'success');
+              this.setSession(data.user, data.business, data.businesses);
+              overlayFormSignup.reset();
+            } else {
+              Toast.show(data.error || 'Signup failed', 'error');
+            }
+          } catch (err) {
+            Toast.show('Network error creating account', 'error');
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Create Account & Enter →';
+          }
+        });
+      }
+
+      // Modal auth handlers
       if (btnOpenAuth) {
         btnOpenAuth.addEventListener('click', () => {
           Modal.open('modal-auth');
