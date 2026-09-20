@@ -40,7 +40,12 @@
             <p>Manage your business billing, customers and products from one place.</p>
           </div>
         </div>
-        <div class="actions">
+        <div class="actions" style="display:flex;align-items:center;gap:8px">
+          <div id="auth-user-badge" style="display:none;align-items:center;gap:8px">
+            <span id="user-display-name" style="font-size:13px;font-weight:600;color:var(--text)"></span>
+            <button class="btn btn-sm" id="btn-logout" title="Logout from cloud account">Logout</button>
+          </div>
+          <button class="btn" id="btn-open-auth">🔑 Log In / Sign Up</button>
           <button class="btn" id="header-btn-customer">＋ Customer</button>
           <button class="btn primary" id="header-btn-invoice">＋ Create Invoice</button>
         </div>
@@ -715,6 +720,64 @@
         <div class="modal-footer">
           <button type="button" class="btn" onclick="closeModal('modal-new-profile')">Cancel</button>
           <button type="submit" class="btn primary">Create Profile</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: USER AUTHENTICATION (LOGIN / SIGNUP) -->
+  <div class="modal-backdrop" id="modal-auth">
+    <div class="modal-dialog" style="max-width:440px">
+      <div class="modal-header">
+        <h3 id="auth-modal-title">Log In to BillFlow</h3>
+        <button type="button" class="btn-close" onclick="closeModal('modal-auth')">✕</button>
+      </div>
+      <div class="auth-tabs" style="display:flex;border-bottom:1px solid var(--line);margin:0 20px 16px">
+        <button type="button" id="tab-auth-login" class="tab-btn" style="flex:1;padding:10px;background:none;border:none;border-bottom:2px solid var(--p);font-weight:600;color:var(--text);cursor:pointer">Log In</button>
+        <button type="button" id="tab-auth-signup" class="tab-btn" style="flex:1;padding:10px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-weight:600;cursor:pointer">Create Account</button>
+      </div>
+
+      <!-- Login Form -->
+      <form id="form-login">
+        <div class="modal-body" style="padding-top:0">
+          <div class="field">
+            <label>EMAIL ADDRESS *</label>
+            <input type="email" id="login-email" required placeholder="owner@business.com">
+          </div>
+          <div class="field">
+            <label>PASSWORD *</label>
+            <input type="password" id="login-password" required placeholder="••••••••">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" onclick="closeModal('modal-auth')">Cancel</button>
+          <button type="submit" class="btn primary" id="btn-submit-login">Log In →</button>
+        </div>
+      </form>
+
+      <!-- Signup Form -->
+      <form id="form-signup" style="display:none">
+        <div class="modal-body" style="padding-top:0">
+          <div class="field">
+            <label>FULL NAME *</label>
+            <input type="text" id="signup-name" required placeholder="e.g. Rahul Sharma">
+          </div>
+          <div class="field">
+            <label>INITIAL BUSINESS NAME *</label>
+            <input type="text" id="signup-biz-name" required placeholder="e.g. Apex Retailers & Co.">
+          </div>
+          <div class="field">
+            <label>EMAIL ADDRESS *</label>
+            <input type="email" id="signup-email" required placeholder="owner@business.com">
+          </div>
+          <div class="field">
+            <label>PASSWORD * (MIN 6 CHARS)</label>
+            <input type="password" id="signup-password" minlength="6" required placeholder="••••••••">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" onclick="closeModal('modal-auth')">Cancel</button>
+          <button type="submit" class="btn primary" id="btn-submit-signup">Create Account →</button>
         </div>
       </form>
     </div>

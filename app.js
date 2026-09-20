@@ -2142,9 +2142,171 @@
     }
   });
 
+  // --- AUTH CONTROLLER ---
+  const AuthController = {
+    currentUser: null,
+    currentBusinesses: [],
+
+    async checkSession() {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.user) {
+            this.setSession(data.user, data.business, data.businesses);
+          }
+        }
+      } catch (e) {
+        // Running offline or local file mode
+      }
+    },
+
+    setSession(user, business, businesses) {
+      this.currentUser = user;
+      this.currentBusinesses = businesses || [];
+
+      const btnAuth = document.getElementById('btn-open-auth');
+      const badge = document.getElementById('auth-user-badge');
+      const nameEl = document.getElementById('user-display-name');
+
+      if (user) {
+        if (btnAuth) btnAuth.style.display = 'none';
+        if (badge) badge.style.display = 'flex';
+        if (nameEl) nameEl.textContent = `👤 ${user.fullName || user.email}`;
+      } else {
+        if (btnAuth) btnAuth.style.display = 'inline-block';
+        if (badge) badge.style.display = 'none';
+      }
+    },
+
+    init() {
+      const btnOpenAuth = document.getElementById('btn-open-auth');
+      const tabLogin = document.getElementById('tab-auth-login');
+      const tabSignup = document.getElementById('tab-auth-signup');
+      const formLogin = document.getElementById('form-login');
+      const formSignup = document.getElementById('form-signup');
+      const btnLogout = document.getElementById('btn-logout');
+
+      if (btnOpenAuth) {
+        btnOpenAuth.addEventListener('click', () => {
+          Modal.open('modal-auth');
+        });
+      }
+
+      if (tabLogin && tabSignup) {
+        tabLogin.addEventListener('click', () => {
+          tabLogin.style.borderBottomColor = 'var(--p)';
+          tabLogin.style.color = 'var(--text)';
+          tabSignup.style.borderBottomColor = 'transparent';
+          tabSignup.style.color = 'var(--muted)';
+          formLogin.style.display = 'block';
+          formSignup.style.display = 'none';
+          document.getElementById('auth-modal-title').textContent = 'Log In to BillFlow';
+        });
+
+        tabSignup.addEventListener('click', () => {
+          tabSignup.style.borderBottomColor = 'var(--p)';
+          tabSignup.style.color = 'var(--text)';
+          tabLogin.style.borderBottomColor = 'transparent';
+          tabLogin.style.color = 'var(--muted)';
+          formSignup.style.display = 'block';
+          formLogin.style.display = 'none';
+          document.getElementById('auth-modal-title').textContent = 'Create BillFlow Account';
+        });
+      }
+
+      if (formLogin) {
+        formLogin.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const email = document.getElementById('login-email').value.trim();
+          const password = document.getElementById('login-password').value;
+          const submitBtn = document.getElementById('btn-submit-login');
+
+          try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Logging in...';
+
+            const res = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+              Toast.show(`Welcome back, ${data.user.fullName || data.user.email}!`, 'success');
+              this.setSession(data.user, data.business, data.businesses);
+              Modal.close('modal-auth');
+              formLogin.reset();
+            } else {
+              Toast.show(data.error || 'Login failed', 'error');
+            }
+          } catch (err) {
+            Toast.show('Network error logging in', 'error');
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Log In →';
+          }
+        });
+      }
+
+      if (formSignup) {
+        formSignup.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const fullName = document.getElementById('signup-name').value.trim();
+          const businessName = document.getElementById('signup-biz-name').value.trim();
+          const email = document.getElementById('signup-email').value.trim();
+          const password = document.getElementById('signup-password').value;
+          const submitBtn = document.getElementById('btn-submit-signup');
+
+          try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating account...';
+
+            const res = await fetch('/api/auth/signup', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fullName, businessName, email, password })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+              Toast.show('Account created successfully!', 'success');
+              this.setSession(data.user, data.business, data.businesses);
+              Modal.close('modal-auth');
+              formSignup.reset();
+            } else {
+              Toast.show(data.error || 'Signup failed', 'error');
+            }
+          } catch (err) {
+            Toast.show('Network error creating account', 'error');
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Create Account →';
+          }
+        });
+      }
+
+      if (btnLogout) {
+        btnLogout.addEventListener('click', async () => {
+          try {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            this.setSession(null, null, []);
+            Toast.show('Logged out successfully', 'success');
+          } catch (err) {
+            this.setSession(null, null, []);
+          }
+        });
+      }
+
+      this.checkSession();
+    }
+  };
+
   // --- BOOTSTRAP APP ON DOM READY ---
   document.addEventListener('DOMContentLoaded', () => {
     Navigation.init();
+    AuthController.init();
     SettingsController.init();
     SettingsController.loadSettings();
     ProductController.init();

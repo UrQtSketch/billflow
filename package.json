@@ -1,0 +1,16 @@
+{
+  "name": "billflow",
+  "version": "1.1.0",
+  "description": "BillFlow — Universal Business Billing Application",
+  "main": "app.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie": "^1.0.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.16.3"
+  }
+}
