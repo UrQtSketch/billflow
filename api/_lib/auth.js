@@ -72,12 +72,25 @@ function clearAuthCookie() {
   });
 }
 
+async function verifyBusinessAccess(userId, businessId) {
+  if (!userId || !businessId) return false;
+  const { getPool, query, memoryStore } = require('./db');
+  const pool = getPool();
+  if (pool) {
+    const res = await query('SELECT id FROM businesses WHERE id = $1 AND owner_id = $2', [businessId, userId]);
+    return res && res.rows.length > 0;
+  } else {
+    return memoryStore.businesses.some(b => b.id === businessId && b.owner_id === userId);
+  }
+}
+
 module.exports = {
   hashPassword,
   verifyPassword,
   generateToken,
   verifyToken,
   getAuthUser,
+  verifyBusinessAccess,
   serializeAuthCookie,
   clearAuthCookie,
   COOKIE_NAME
