@@ -10,7 +10,7 @@ module.exports = async function handler(req, res) {
   const businessId = queryParams.businessId || authUser.activeBusinessId;
   if (!businessId) return sendError(res, 400, 'Business ID is required');
 
-  const hasAccess = await verifyBusinessAccess(authUser.userId, businessId);
+  const hasAccess = await verifyBusinessAccess(authUser.userId, businessId, authUser);
   if (!hasAccess) return sendError(res, 403, 'Forbidden — Access denied');
 
   const pool = getPool();

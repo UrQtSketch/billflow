@@ -72,8 +72,11 @@ function clearAuthCookie() {
   });
 }
 
-async function verifyBusinessAccess(userId, businessId) {
+async function verifyBusinessAccess(userId, businessId, authUser = null) {
   if (!userId || !businessId) return false;
+  if (authUser && authUser.userId === userId && authUser.activeBusinessId === businessId) {
+    return true;
+  }
   const { getPool, query, memoryStore } = require('./db');
   const pool = getPool();
   if (pool) {
