@@ -1,22 +1,16 @@
-const { getAuthUser, verifyBusinessAccess } = require('../_lib/auth');
-const { getPool, query, initSchema, memoryStore } = require('../_lib/db');
-const { sendJson, sendError } = require('../_lib/response');
+const { getAuthUser, verifyBusinessAccess } = require('./_lib/auth');
+const { getPool, query, initSchema, memoryStore } = require('./_lib/db');
+const { sendJson, sendError } = require('./_lib/response');
 
 module.exports = async function handler(req, res) {
   const authUser = getAuthUser(req);
-  if (!authUser) {
-    return sendError(res, 401, 'Unauthorized — Please log in');
-  }
+  if (!authUser) return sendError(res, 401, 'Unauthorized — Please log in');
 
   const businessId = req.query?.businessId || authUser.activeBusinessId;
-  if (!businessId) {
-    return sendError(res, 400, 'Business ID is required');
-  }
+  if (!businessId) return sendError(res, 400, 'Business ID is required');
 
   const hasAccess = await verifyBusinessAccess(authUser.userId, businessId);
-  if (!hasAccess) {
-    return sendError(res, 403, 'Forbidden — Access denied to this business');
-  }
+  if (!hasAccess) return sendError(res, 403, 'Forbidden — Access denied');
 
   const pool = getPool();
   if (pool) await initSchema();
@@ -25,18 +19,12 @@ module.exports = async function handler(req, res) {
     const today = new Date().toISOString().split('T')[0];
 
     if (pool) {
-      // Invoices
-      const invRes = await query(
-        'SELECT * FROM invoices WHERE business_id = $1 ORDER BY invoice_date DESC, created_at DESC',
-        [businessId]
-      );
+      const invRes = await query('SELECT * FROM invoices WHERE business_id = $1 ORDER BY invoice_date DESC, created_at DESC', [businessId]);
       const invoices = invRes.rows || [];
 
-      // Settings
       const bizRes = await query('SELECT * FROM businesses WHERE id = $1', [businessId]);
       const business = (bizRes.rows && bizRes.rows[0]) || {};
 
-      // Products
       const prodRes = await query('SELECT * FROM products WHERE business_id = $1', [businessId]);
       const products = prodRes.rows || [];
 
@@ -87,7 +75,6 @@ module.exports = async function handler(req, res) {
       });
     }
   } catch (err) {
-    console.error('Dashboard Stats Error:', err);
-    return sendError(res, 500, 'Error retrieving dashboard statistics');
+    return sendError(res, 500, 'Error retrieving dashboard metrics');
   }
 };
