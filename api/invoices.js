@@ -218,6 +218,169 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  // PUT Update Invoice
+  if (req.method === 'PUT' && id) {
+    try {
+      const {
+        customerId, customerName, customerPhone, customerEmail, customerAddress,
+        date, dueDate, items, discountType, discountValue, taxRate, paymentMethod, paymentStatus, paidAmount, notes
+      } = body || {};
+
+      if (!items || !Array.isArray(items) || items.length === 0) return sendError(res, 400, 'At least one line item is required');
+
+      let subtotal = 0;
+      const validatedItems = [];
+      for (const item of items) {
+        const qty = parseInt(item.qty, 10);
+        const price = parseFloat(item.price);
+        if (isNaN(qty) || qty < 1) return sendError(res, 400, 'Quantities must be positive numbers');
+        if (isNaN(price) || price < 0) return sendError(res, 400, 'Price cannot be negative');
+        const itemTotal = Math.round(qty * price * 100) / 100;
+        subtotal += itemTotal;
+        validatedItems.push({
+          id: item.id || ('it_' + crypto.randomBytes(4).toString('hex')),
+          productId: item.productId || null,
+          name: item.name || 'Item',
+          sku: item.sku || '',
+          qty,
+          price,
+          total: itemTotal
+        });
+      }
+
+      const cleanDiscType = discountType === 'fixed' ? 'fixed' : 'percent';
+      const cleanDiscVal = Math.max(0, parseFloat(discountValue) || 0);
+      const discountAmount = cleanDiscType === 'percent'
+        ? Math.round((subtotal * Math.min(100, cleanDiscVal) / 100) * 100) / 100
+        : Math.min(subtotal, cleanDiscVal);
+
+      const taxable = Math.max(0, subtotal - discountAmount);
+      const cleanTaxRate = Math.max(0, Math.min(100, parseFloat(taxRate) || 0));
+      const taxAmount = Math.round(((taxable * cleanTaxRate) / 100) * 100) / 100;
+      const grandTotal = Math.round((taxable + taxAmount) * 100) / 100;
+
+      const validStatuses = ['Paid', 'Pending', 'Partial', 'Draft'];
+      const cleanStatus = validStatuses.includes(paymentStatus) ? paymentStatus : 'Pending';
+      let cleanPaid = 0;
+      if (cleanStatus === 'Paid') cleanPaid = grandTotal;
+      else if (cleanStatus === 'Partial') cleanPaid = Math.max(0, Math.min(grandTotal, parseFloat(paidAmount) || 0));
+      else cleanPaid = 0;
+      const balanceDue = Math.max(0, Math.round((grandTotal - cleanPaid) * 100) / 100);
+
+      if (pool) {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          // Check invoice exists
+          const existRes = await client.query('SELECT * FROM invoices WHERE id = $1 AND business_id = $2', [id, businessId]);
+          if (!existRes || existRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return sendError(res, 404, 'Invoice not found');
+          }
+
+          // Restore old stock
+          const oldItemsRes = await client.query('SELECT * FROM invoice_items WHERE invoice_id = $1', [id]);
+          for (const oldIt of oldItemsRes.rows || []) {
+            if (oldIt.product_id) {
+              await client.query('UPDATE products SET stock = stock + $1 WHERE id = $2 AND business_id = $3', [oldIt.qty, oldIt.product_id, businessId]);
+            }
+          }
+
+          // Update invoice details
+          const invRes = await client.query(
+            `UPDATE invoices
+             SET customer_id = $1, customer_name = COALESCE($2, customer_name), customer_phone = $3,
+                 customer_email = $4, customer_address = $5, invoice_date = COALESCE($6, invoice_date),
+                 due_date = $7, subtotal = $8, discount_type = $9, discount_value = $10,
+                 discount_amount = $11, tax_rate = $12, tax_amount = $13, grand_total = $14,
+                 payment_method = $15, payment_status = $16, paid_amount = $17, balance_due = $18,
+                 notes = $19, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $20 AND business_id = $21 RETURNING *`,
+            [
+              customerId || null, customerName, customerPhone || '', customerEmail || '', customerAddress || '',
+              date, dueDate || null, subtotal, cleanDiscType, cleanDiscVal, discountAmount,
+              cleanTaxRate, taxAmount, grandTotal, paymentMethod || 'Cash', cleanStatus, cleanPaid, balanceDue,
+              notes || '', id, businessId
+            ]
+          );
+
+          // Replace line items and deduct new stock
+          await client.query('DELETE FROM invoice_items WHERE invoice_id = $1', [id]);
+          for (const it of validatedItems) {
+            await client.query(
+              'INSERT INTO invoice_items (invoice_id, product_id, name, sku, qty, price, total) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+              [id, it.productId, it.name, it.sku, it.qty, it.price, it.total]
+            );
+            if (it.productId && cleanStatus !== 'Draft') {
+              await client.query('UPDATE products SET stock = GREATEST(0, stock - $1) WHERE id = $2 AND business_id = $3 AND type = $4', [it.qty, it.productId, businessId, 'product']);
+            }
+          }
+
+          await client.query('COMMIT');
+          const updatedInv = invRes.rows[0];
+          updatedInv.items = validatedItems;
+          return sendJson(res, 200, { message: 'Invoice updated', invoice: updatedInv });
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        } finally {
+          client.release();
+        }
+      } else {
+        const idx = memoryStore.invoices.findIndex(i => i.id === id && i.business_id === businessId);
+        if (idx === -1) return sendError(res, 404, 'Invoice not found');
+        const oldInv = memoryStore.invoices[idx];
+
+        // Restore old stock
+        (oldInv.items || []).forEach(oldIt => {
+          if (oldIt.productId) {
+            const p = memoryStore.products.find(prod => prod.id === oldIt.productId && prod.business_id === businessId);
+            if (p && p.type === 'product') p.stock = (p.stock || 0) + oldIt.qty;
+          }
+        });
+
+        // Deduct new stock
+        if (cleanStatus !== 'Draft') {
+          validatedItems.forEach(it => {
+            if (it.productId) {
+              const p = memoryStore.products.find(prod => prod.id === it.productId && prod.business_id === businessId);
+              if (p && p.type === 'product') p.stock = Math.max(0, (p.stock || 0) - it.qty);
+            }
+          });
+        }
+
+        const updatedInvoice = {
+          ...oldInv,
+          customer_id: customerId || null,
+          customer_name: customerName || oldInv.customer_name,
+          customer_phone: customerPhone || '',
+          customer_email: customerEmail || '',
+          customer_address: customerAddress || '',
+          invoice_date: date || oldInv.invoice_date,
+          due_date: dueDate || null,
+          subtotal,
+          discount_type: cleanDiscType,
+          discount_value: cleanDiscVal,
+          discount_amount: discountAmount,
+          tax_rate: cleanTaxRate,
+          tax_amount: taxAmount,
+          grand_total: grandTotal,
+          payment_method: paymentMethod || oldInv.payment_method,
+          payment_status: cleanStatus,
+          paid_amount: cleanPaid,
+          balance_due: balanceDue,
+          notes: notes !== undefined ? notes : oldInv.notes,
+          items: validatedItems,
+          updated_at: new Date().toISOString()
+        };
+        memoryStore.invoices[idx] = updatedInvoice;
+        return sendJson(res, 200, { message: 'Invoice updated', invoice: updatedInvoice });
+      }
+    } catch (err) {
+      return sendError(res, 500, 'Error updating invoice');
+    }
+  }
+
   // DELETE Invoice + Stock Restoration
   if (req.method === 'DELETE' && id) {
     try {

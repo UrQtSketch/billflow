@@ -289,6 +289,216 @@
   // Initialize store
   Store.init();
 
+  // --- DATA NORMALIZER LAYER ---
+  const Normalizer = {
+    settings(biz) {
+      if (!biz) return null;
+      return {
+        businessName: biz.name || biz.businessName || 'My Business',
+        ownerName: biz.owner_name || biz.ownerName || '',
+        phone: biz.phone || '',
+        address: biz.address || '',
+        gstin: biz.gstin || '',
+        invoicePrefix: biz.invoice_prefix || biz.invoicePrefix || 'INV-',
+        nextNumber: Number(biz.next_number !== undefined ? biz.next_number : biz.nextNumber) || 1001,
+        currency: biz.currency || '₹'
+      };
+    },
+    product(prod) {
+      if (!prod) return null;
+      return {
+        id: prod.id,
+        businessId: prod.business_id || prod.businessId,
+        name: prod.name,
+        type: prod.type || 'product',
+        sku: prod.sku || '',
+        category: prod.category || 'General',
+        price: Number(prod.price) || 0,
+        stock: Number(prod.stock) || 0,
+        createdAt: prod.created_at || prod.createdAt
+      };
+    },
+    customer(cust) {
+      if (!cust) return null;
+      return {
+        id: cust.id,
+        businessId: cust.business_id || cust.businessId,
+        name: cust.name,
+        phone: cust.phone || '',
+        email: cust.email || '',
+        address: cust.address || '',
+        createdAt: cust.created_at || cust.createdAt || (typeof Utils !== 'undefined' ? Utils.todayYMD() : '2026-09-20')
+      };
+    },
+    invoice(inv) {
+      if (!inv) return null;
+      return {
+        id: inv.id,
+        businessId: inv.business_id || inv.businessId,
+        invoiceNumber: inv.invoice_number || inv.invoiceNumber,
+        customerId: inv.customer_id || inv.customerId,
+        customerName: inv.customer_name || inv.customerName,
+        customerPhone: inv.customer_phone || inv.customerPhone || '',
+        customerEmail: inv.customer_email || inv.customerEmail || '',
+        customerAddress: inv.customer_address || inv.customerAddress || '',
+        date: inv.invoice_date || inv.date,
+        dueDate: inv.due_date || inv.dueDate || inv.invoice_date || inv.date,
+        items: (inv.items || []).map(it => ({
+          id: it.id,
+          productId: it.product_id || it.productId,
+          name: it.name,
+          sku: it.sku || '',
+          qty: Number(it.qty) || 1,
+          price: Number(it.price) || 0,
+          total: Number(it.total) || 0
+        })),
+        subtotal: Number(inv.subtotal) || 0,
+        discountType: inv.discount_type || inv.discountType || 'percent',
+        discountValue: Number(inv.discount_value !== undefined ? inv.discount_value : inv.discountValue) || 0,
+        discountAmount: Number(inv.discount_amount !== undefined ? inv.discount_amount : inv.discountAmount) || 0,
+        taxRate: Number(inv.tax_rate !== undefined ? inv.tax_rate : inv.taxRate) || 0,
+        taxAmount: Number(inv.tax_amount !== undefined ? inv.tax_amount : inv.taxAmount) || 0,
+        grandTotal: Number(inv.grand_total !== undefined ? inv.grand_total : inv.grandTotal) || 0,
+        paymentMethod: inv.payment_method || inv.paymentMethod || 'Cash',
+        paymentStatus: inv.payment_status || inv.paymentStatus || 'Pending',
+        paidAmount: Number(inv.paid_amount !== undefined ? inv.paid_amount : inv.paidAmount) || 0,
+        balanceDue: Number(inv.balance_due !== undefined ? inv.balance_due : inv.balanceDue) || 0,
+        notes: inv.notes || '',
+        createdAt: inv.created_at || inv.createdAt || new Date().toISOString()
+      };
+    }
+  };
+
+  // --- CLOUD API CLIENT ---
+  const ApiClient = {
+    async fetchMe() {
+      const res = await fetch('/api/auth/me');
+      return res.json();
+    },
+    async login(email, password) {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      return res.json();
+    },
+    async signup(fullName, businessName, email, password) {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName, businessName, email, password })
+      });
+      return res.json();
+    },
+    async logout() {
+      const res = await fetch('/api/auth/logout', { method: 'POST' });
+      return res.json();
+    },
+    async fetchBusinesses() {
+      const res = await fetch('/api/businesses');
+      return res.json();
+    },
+    async fetchBusiness(businessId) {
+      const res = await fetch(`/api/businesses/${businessId}`);
+      return res.json();
+    },
+    async createBusiness(name) {
+      const res = await fetch('/api/businesses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      return res.json();
+    },
+    async updateBusiness(businessId, data) {
+      const res = await fetch(`/api/businesses/${businessId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return res.json();
+    },
+    async fetchProducts(businessId) {
+      const res = await fetch(`/api/products?businessId=${encodeURIComponent(businessId)}`);
+      return res.json();
+    },
+    async createProduct(businessId, data) {
+      const res = await fetch(`/api/products?businessId=${encodeURIComponent(businessId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return res.json();
+    },
+    async updateProduct(businessId, productId, data) {
+      const res = await fetch(`/api/products/${productId}?businessId=${encodeURIComponent(businessId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return res.json();
+    },
+    async deleteProduct(businessId, productId) {
+      const res = await fetch(`/api/products/${productId}?businessId=${encodeURIComponent(businessId)}`, {
+        method: 'DELETE'
+      });
+      return res.json();
+    },
+    async fetchCustomers(businessId) {
+      const res = await fetch(`/api/customers?businessId=${encodeURIComponent(businessId)}`);
+      return res.json();
+    },
+    async createCustomer(businessId, data) {
+      const res = await fetch(`/api/customers?businessId=${encodeURIComponent(businessId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return res.json();
+    },
+    async updateCustomer(businessId, customerId, data) {
+      const res = await fetch(`/api/customers/${customerId}?businessId=${encodeURIComponent(businessId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return res.json();
+    },
+    async deleteCustomer(businessId, customerId) {
+      const res = await fetch(`/api/customers/${customerId}?businessId=${encodeURIComponent(businessId)}`, {
+        method: 'DELETE'
+      });
+      return res.json();
+    },
+    async fetchInvoices(businessId) {
+      const res = await fetch(`/api/invoices?businessId=${encodeURIComponent(businessId)}`);
+      return res.json();
+    },
+    async createInvoice(businessId, data) {
+      const res = await fetch(`/api/invoices?businessId=${encodeURIComponent(businessId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return res.json();
+    },
+    async updateInvoice(businessId, invoiceId, data) {
+      const res = await fetch(`/api/invoices/${invoiceId}?businessId=${encodeURIComponent(businessId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return res.json();
+    },
+    async deleteInvoice(businessId, invoiceId) {
+      const res = await fetch(`/api/invoices/${invoiceId}?businessId=${encodeURIComponent(businessId)}`, {
+        method: 'DELETE'
+      });
+      return res.json();
+    }
+  };
+
   // --- UTILITY FUNCTIONS ---
   const Utils = {
     formatCurrency(amount, symbol) {
@@ -545,11 +755,16 @@
       const profileSelect = document.getElementById('settings-profile-select');
       if (profileSelect) {
         this.renderProfileDropdown();
-        profileSelect.addEventListener('change', (e) => {
-          Store.switchProfile(e.target.value);
-          const p = Store.getProfiles().find(x => x.id === e.target.value);
-          Toast.show(`Switched to business profile: ${p ? p.name : e.target.value}`, 'success');
-          this.refreshAllDataViews();
+        profileSelect.addEventListener('change', async (e) => {
+          const selectedId = e.target.value;
+          Store.switchProfile(selectedId);
+          const p = Store.getProfiles().find(x => x.id === selectedId);
+          Toast.show(`Switched to business workspace: ${p ? p.name : selectedId}`, 'success');
+          if (AuthController.isAuthenticated()) {
+            await AuthController.syncFromCloud(selectedId);
+          } else {
+            this.refreshAllDataViews();
+          }
         });
       }
 
@@ -563,7 +778,7 @@
 
       const formNewProfile = document.getElementById('form-new-profile');
       if (formNewProfile) {
-        formNewProfile.addEventListener('submit', (e) => {
+        formNewProfile.addEventListener('submit', async (e) => {
           e.preventDefault();
           const nameInput = document.getElementById('new-profile-name');
           const name = nameInput ? nameInput.value.trim() : '';
@@ -571,11 +786,31 @@
             Toast.show('Profile name is required', 'error');
             return;
           }
+
+          if (AuthController.isAuthenticated()) {
+            try {
+              const res = await ApiClient.createBusiness(name);
+              if (res.success && res.business) {
+                const profiles = Store.getProfiles();
+                profiles.push({ id: res.business.id, name: res.business.name });
+                Store.saveProfiles(profiles);
+                currentProfile = res.business.id;
+                localStorage.setItem('billflow_active_profile', res.business.id);
+                Modal.close('modal-new-profile');
+                await AuthController.syncFromCloud(res.business.id);
+                Toast.show(`Created and switched to business workspace: "${name}"`, 'success');
+                return;
+              }
+            } catch (err) {
+              console.warn('Could not create cloud business profile', err);
+            }
+          }
+
           Store.createProfile(name);
           Modal.close('modal-new-profile');
           this.renderProfileDropdown();
           this.refreshAllDataViews();
-          Toast.show(`Created and switched to business profile: "${name}"`, 'success');
+          Toast.show(`Created and switched to business workspace: "${name}"`, 'success');
         });
       }
     },
@@ -619,7 +854,7 @@
       // Update global business displays
       this.updateGlobalBranding(settings);
     },
-    saveSettings() {
+    async saveSettings() {
       const settings = {
         businessName: document.getElementById('setting-business-name').value.trim() || 'My Business',
         ownerName: document.getElementById('setting-owner-name').value.trim(),
@@ -634,6 +869,27 @@
       Store.saveSettings(settings);
       this.updateGlobalBranding(settings);
       InvoiceController.syncFormWithSettings();
+
+      if (AuthController.isAuthenticated()) {
+        const activeBizId = AuthController.getActiveBusinessId();
+        if (activeBizId && activeBizId !== 'default') {
+          try {
+            await ApiClient.updateBusiness(activeBizId, {
+              name: settings.businessName,
+              ownerName: settings.ownerName,
+              phone: settings.phone,
+              address: settings.address,
+              gstin: settings.gstin,
+              invoicePrefix: settings.invoicePrefix,
+              nextNumber: settings.nextNumber,
+              currency: settings.currency
+            });
+          } catch (err) {
+            console.warn('Cloud settings update issue', err);
+          }
+        }
+      }
+
       Toast.show('Business settings updated successfully!', 'success');
     },
     updateGlobalBranding(settings) {
@@ -811,7 +1067,7 @@
 
       Modal.open('modal-product');
     },
-    saveProduct() {
+    async saveProduct() {
       const name = document.getElementById('prod-name').value.trim();
       const type = document.getElementById('prod-type').value;
       const sku = document.getElementById('prod-sku').value.trim();
@@ -831,6 +1087,25 @@
       const products = Store.getProducts();
 
       if (this.editingId) {
+        if (AuthController.isAuthenticated()) {
+          const activeBizId = AuthController.getActiveBusinessId();
+          try {
+            const res = await ApiClient.updateProduct(activeBizId, this.editingId, { name, type, sku, category, price, stock });
+            if (res.product) {
+              const norm = Normalizer.product(res.product);
+              const idx = products.findIndex(p => p.id === this.editingId);
+              if (idx !== -1) products[idx] = norm;
+              Store.saveProducts(products);
+              Toast.show('Item updated successfully', 'success');
+              Modal.close('modal-product');
+              this.renderList();
+              InvoiceController.populateProductDropdowns();
+              return;
+            }
+          } catch (err) {
+            console.warn('Cloud product update issue', err);
+          }
+        }
         const index = products.findIndex(p => p.id === this.editingId);
         if (index !== -1) {
           products[index] = { ...products[index], name, type, sku, category, price, stock };
@@ -838,6 +1113,24 @@
           Toast.show('Item updated successfully', 'success');
         }
       } else {
+        if (AuthController.isAuthenticated()) {
+          const activeBizId = AuthController.getActiveBusinessId();
+          try {
+            const res = await ApiClient.createProduct(activeBizId, { name, type, sku, category, price, stock });
+            if (res.product) {
+              const norm = Normalizer.product(res.product);
+              products.push(norm);
+              Store.saveProducts(products);
+              Toast.show('Item added to catalog', 'success');
+              Modal.close('modal-product');
+              this.renderList();
+              InvoiceController.populateProductDropdowns();
+              return;
+            }
+          } catch (err) {
+            console.warn('Cloud product creation issue', err);
+          }
+        }
         const newProduct = {
           id: Utils.generateId('prod_'),
           name,
@@ -856,12 +1149,20 @@
       this.renderList();
       InvoiceController.populateProductDropdowns();
     },
-    delete(id) {
+    async delete(id) {
       const products = Store.getProducts();
       const prod = products.find(p => p.id === id);
       if (!prod) return;
 
       if (confirm(`Are you sure you want to delete "${prod.name}"?`)) {
+        if (AuthController.isAuthenticated()) {
+          const activeBizId = AuthController.getActiveBusinessId();
+          try {
+            await ApiClient.deleteProduct(activeBizId, id);
+          } catch (err) {
+            console.warn('Cloud product deletion issue', err);
+          }
+        }
         const updated = products.filter(p => p.id !== id);
         Store.saveProducts(updated);
         Toast.show('Item deleted from catalog', 'success');
@@ -967,7 +1268,7 @@
       document.getElementById('cust-address').value = customer.address || '';
       Modal.open('modal-customer');
     },
-    saveCustomer() {
+    async saveCustomer() {
       const name = document.getElementById('cust-name').value.trim();
       const phone = document.getElementById('cust-phone').value.trim();
       const email = document.getElementById('cust-email').value.trim();
@@ -985,6 +1286,25 @@
       const customers = Store.getCustomers();
 
       if (this.editingId) {
+        if (AuthController.isAuthenticated()) {
+          const activeBizId = AuthController.getActiveBusinessId();
+          try {
+            const res = await ApiClient.updateCustomer(activeBizId, this.editingId, { name, phone, email, address });
+            if (res.customer) {
+              const norm = Normalizer.customer(res.customer);
+              const idx = customers.findIndex(c => c.id === this.editingId);
+              if (idx !== -1) customers[idx] = norm;
+              Store.saveCustomers(customers);
+              Toast.show('Customer updated successfully', 'success');
+              Modal.close('modal-customer');
+              this.renderList();
+              InvoiceController.populateCustomerDropdown();
+              return;
+            }
+          } catch (err) {
+            console.warn('Cloud customer update issue', err);
+          }
+        }
         const index = customers.findIndex(c => c.id === this.editingId);
         if (index !== -1) {
           customers[index] = { ...customers[index], name, phone, email, address };
@@ -992,6 +1312,24 @@
           Toast.show('Customer updated successfully', 'success');
         }
       } else {
+        if (AuthController.isAuthenticated()) {
+          const activeBizId = AuthController.getActiveBusinessId();
+          try {
+            const res = await ApiClient.createCustomer(activeBizId, { name, phone, email, address });
+            if (res.customer) {
+              const norm = Normalizer.customer(res.customer);
+              customers.push(norm);
+              Store.saveCustomers(customers);
+              Toast.show('Customer added successfully', 'success');
+              Modal.close('modal-customer');
+              this.renderList();
+              InvoiceController.populateCustomerDropdown();
+              return;
+            }
+          } catch (err) {
+            console.warn('Cloud customer creation issue', err);
+          }
+        }
         const newCustomer = {
           id: Utils.generateId('cust_'),
           name,
@@ -1053,12 +1391,20 @@
 
       Modal.open('modal-customer-history');
     },
-    delete(id) {
+    async delete(id) {
       const customers = Store.getCustomers();
       const customer = customers.find(c => c.id === id);
       if (!customer) return;
 
       if (confirm(`Are you sure you want to delete customer "${customer.name}"?`)) {
+        if (AuthController.isAuthenticated()) {
+          const activeBizId = AuthController.getActiveBusinessId();
+          try {
+            await ApiClient.deleteCustomer(activeBizId, id);
+          } catch (err) {
+            console.warn('Cloud customer deletion issue', err);
+          }
+        }
         const updated = customers.filter(c => c.id !== id);
         Store.saveCustomers(updated);
         Toast.show('Customer deleted', 'success');
@@ -1740,7 +2086,7 @@
         </div>
       `;
     },
-    saveInvoice(isDraft = false) {
+    async saveInvoice(isDraft = false) {
       const data = this.collectFormData();
       const settings = Store.getSettings();
 
@@ -1808,15 +2154,55 @@
           customers.push(newCust);
           Store.saveCustomers(customers);
           customerId = newCust.id;
+
+          if (AuthController.isAuthenticated()) {
+            const activeBizId = AuthController.getActiveBusinessId();
+            ApiClient.createCustomer(activeBizId, newCust).catch(() => {});
+          }
         }
       }
 
-      // Stock adjustment logic
+      // If authenticated, persist to cloud
+      if (AuthController.isAuthenticated()) {
+        const activeBizId = AuthController.getActiveBusinessId();
+        try {
+          const payload = {
+            ...data,
+            customerId,
+            paymentStatus: isDraft ? 'Draft' : data.paymentStatus
+          };
+
+          if (this.editingInvoiceId) {
+            const res = await ApiClient.updateInvoice(activeBizId, this.editingInvoiceId, payload);
+            if (res.invoice) {
+              Toast.show(`Invoice #${res.invoice.invoice_number || data.invoiceNumber} updated successfully!`, 'success');
+              await AuthController.syncFromCloud(activeBizId);
+              this.resetForm();
+              DashboardController.render();
+              Navigation.switchView('invoices');
+              return;
+            }
+          } else {
+            const res = await ApiClient.createInvoice(activeBizId, payload);
+            if (res.invoice) {
+              Toast.show(`Invoice #${res.invoice.invoice_number || data.invoiceNumber} generated successfully!`, 'success');
+              await AuthController.syncFromCloud(activeBizId);
+              this.resetForm();
+              DashboardController.render();
+              Navigation.switchView('invoices');
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn('Cloud invoice save issue, falling back to local store', err);
+        }
+      }
+
+      // Stock adjustment logic (Local fallback / Demo mode)
       if (!isDraft) {
         const products = Store.getProducts();
 
         if (this.editingInvoiceId && this.originalInvoiceSnapshot) {
-          // In edit mode: restore old quantities first, then deduct new quantities
           (this.originalInvoiceSnapshot.items || []).forEach(oldIt => {
             if (oldIt.productId) {
               const prod = products.find(p => p.id === oldIt.productId);
@@ -1835,7 +2221,6 @@
             }
           });
         } else {
-          // In new invoice mode: deduct quantities
           data.items.forEach(it => {
             if (it.productId) {
               const prod = products.find(p => p.id === it.productId);
@@ -2078,13 +2463,27 @@
 
       Modal.open('modal-invoice-preview');
     },
-    delete(id) {
+    async delete(id) {
       const invoices = Store.getInvoices();
       const inv = invoices.find(i => i.id === id);
       if (!inv) return;
 
       if (confirm(`Are you sure you want to delete invoice #${inv.invoiceNumber}? This action cannot be undone.`)) {
-        // Restore stock for products in deleted invoice
+        if (AuthController.isAuthenticated()) {
+          const activeBizId = AuthController.getActiveBusinessId();
+          try {
+            await ApiClient.deleteInvoice(activeBizId, id);
+            Toast.show(`Invoice #${inv.invoiceNumber} deleted`, 'success');
+            await AuthController.syncFromCloud(activeBizId);
+            this.render();
+            DashboardController.render();
+            return;
+          } catch (err) {
+            console.warn('Cloud invoice deletion issue', err);
+          }
+        }
+
+        // Restore stock for products in deleted invoice (Local / Demo fallback)
         if (inv.items && inv.items.length > 0) {
           const products = Store.getProducts();
           inv.items.forEach(item => {
@@ -2145,24 +2544,33 @@
   // --- AUTH CONTROLLER ---
   const AuthController = {
     currentUser: null,
+    currentBusiness: null,
     currentBusinesses: [],
+
+    isAuthenticated() {
+      return !!this.currentUser;
+    },
+
+    getActiveBusinessId() {
+      if (this.currentBusiness && this.currentBusiness.id) return this.currentBusiness.id;
+      if (this.currentBusinesses && this.currentBusinesses.length > 0) return this.currentBusinesses[0].id;
+      return currentProfile !== 'default' ? currentProfile : null;
+    },
 
     async checkSession() {
       try {
-        const res = await fetch('/api/auth/me');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.user) {
-            this.setSession(data.user, data.business, data.businesses);
-          }
+        const data = await ApiClient.fetchMe();
+        if (data.success && data.user) {
+          await this.setSession(data.user, data.business, data.businesses);
         }
       } catch (e) {
         // Running offline or local file mode
       }
     },
 
-    setSession(user, business, businesses) {
+    async setSession(user, business, businesses) {
       this.currentUser = user;
+      this.currentBusiness = business || (businesses && businesses[0]) || null;
       this.currentBusinesses = businesses || [];
 
       const btnAuth = document.getElementById('btn-open-auth');
@@ -2187,16 +2595,7 @@
 
         // Ensure clean, fresh isolated storage for this user's business
         if (!localStorage.getItem(storageKey('settings'))) {
-          localStorage.setItem(storageKey('settings'), JSON.stringify({
-            businessName: business.name || `${user.fullName}'s Business`,
-            ownerName: business.owner_name || user.fullName || '',
-            phone: business.phone || '',
-            address: business.address || '',
-            gstin: business.gstin || '',
-            invoicePrefix: business.invoice_prefix || 'INV-',
-            nextNumber: business.next_number || 1001,
-            currency: business.currency || '₹'
-          }));
+          localStorage.setItem(storageKey('settings'), JSON.stringify(Normalizer.settings(business)));
         }
         if (!localStorage.getItem(storageKey('products'))) {
           localStorage.setItem(storageKey('products'), JSON.stringify([]));
@@ -2208,11 +2607,14 @@
           localStorage.setItem(storageKey('invoices'), JSON.stringify([]));
         }
 
-        // Refresh all UI views to reflect the authenticated business data
+        // Refresh all UI views immediately to reflect the authenticated business data
         if (typeof SettingsController !== 'undefined' && SettingsController.refreshAllDataViews) {
           SettingsController.renderProfileDropdown();
           SettingsController.refreshAllDataViews();
         }
+
+        // Fetch user's business data from cloud API
+        await this.syncFromCloud(business.id);
       } else {
         if (overlay) overlay.classList.remove('hidden');
         if (btnAuth) btnAuth.style.display = 'inline-block';
@@ -2225,6 +2627,41 @@
           SettingsController.renderProfileDropdown();
           SettingsController.refreshAllDataViews();
         }
+      }
+    },
+
+    async syncFromCloud(businessId) {
+      const bizId = businessId || this.getActiveBusinessId();
+      if (!this.currentUser || !bizId || bizId === 'default') return;
+
+      try {
+        const [prodsRes, custsRes, invsRes] = await Promise.all([
+          ApiClient.fetchProducts(bizId).catch(() => null),
+          ApiClient.fetchCustomers(bizId).catch(() => null),
+          ApiClient.fetchInvoices(bizId).catch(() => null)
+        ]);
+
+        if (prodsRes && Array.isArray(prodsRes.products)) {
+          const normProducts = prodsRes.products.map(Normalizer.product).filter(Boolean);
+          Store.saveProducts(normProducts);
+        }
+
+        if (custsRes && Array.isArray(custsRes.customers)) {
+          const normCustomers = custsRes.customers.map(Normalizer.customer).filter(Boolean);
+          Store.saveCustomers(normCustomers);
+        }
+
+        if (invsRes && Array.isArray(invsRes.invoices)) {
+          const normInvoices = invsRes.invoices.map(Normalizer.invoice).filter(Boolean);
+          Store.saveInvoices(normInvoices);
+        }
+
+        if (typeof SettingsController !== 'undefined' && SettingsController.refreshAllDataViews) {
+          SettingsController.renderProfileDropdown();
+          SettingsController.refreshAllDataViews();
+        }
+      } catch (err) {
+        console.warn('Cloud sync issue', err);
       }
     },
 
@@ -2280,16 +2717,10 @@
             submitBtn.disabled = true;
             submitBtn.textContent = 'Logging in...';
 
-            const res = await fetch('/api/auth/login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email, password })
-            });
-
-            const data = await res.json();
+            const data = await ApiClient.login(email, password);
             if (data.success) {
               Toast.show(`Welcome back, ${data.user.fullName || data.user.email}!`, 'success');
-              this.setSession(data.user, data.business, data.businesses);
+              await this.setSession(data.user, data.business, data.businesses);
               overlayFormLogin.reset();
             } else {
               Toast.show(data.error || 'Login failed', 'error');
@@ -2317,16 +2748,10 @@
             submitBtn.disabled = true;
             submitBtn.textContent = 'Creating account...';
 
-            const res = await fetch('/api/auth/signup', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fullName, businessName, email, password })
-            });
-
-            const data = await res.json();
+            const data = await ApiClient.signup(fullName, businessName, email, password);
             if (data.success) {
               Toast.show('Account created successfully! Welcome to BillFlow.', 'success');
-              this.setSession(data.user, data.business, data.businesses);
+              await this.setSession(data.user, data.business, data.businesses);
               overlayFormSignup.reset();
             } else {
               Toast.show(data.error || 'Signup failed', 'error');
@@ -2380,16 +2805,10 @@
             submitBtn.disabled = true;
             submitBtn.textContent = 'Logging in...';
 
-            const res = await fetch('/api/auth/login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email, password })
-            });
-
-            const data = await res.json();
+            const data = await ApiClient.login(email, password);
             if (data.success) {
               Toast.show(`Welcome back, ${data.user.fullName || data.user.email}!`, 'success');
-              this.setSession(data.user, data.business, data.businesses);
+              await this.setSession(data.user, data.business, data.businesses);
               Modal.close('modal-auth');
               formLogin.reset();
             } else {
@@ -2417,16 +2836,10 @@
             submitBtn.disabled = true;
             submitBtn.textContent = 'Creating account...';
 
-            const res = await fetch('/api/auth/signup', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fullName, businessName, email, password })
-            });
-
-            const data = await res.json();
+            const data = await ApiClient.signup(fullName, businessName, email, password);
             if (data.success) {
               Toast.show('Account created successfully!', 'success');
-              this.setSession(data.user, data.business, data.businesses);
+              await this.setSession(data.user, data.business, data.businesses);
               Modal.close('modal-auth');
               formSignup.reset();
             } else {
@@ -2444,11 +2857,11 @@
       if (btnLogout) {
         btnLogout.addEventListener('click', async () => {
           try {
-            await fetch('/api/auth/logout', { method: 'POST' });
-            this.setSession(null, null, []);
+            await ApiClient.logout();
+            await this.setSession(null, null, []);
             Toast.show('Logged out successfully', 'success');
           } catch (err) {
-            this.setSession(null, null, []);
+            await this.setSession(null, null, []);
           }
         });
       }
