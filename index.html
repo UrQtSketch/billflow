@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BillFlow — Universal Business Billing</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="logo">B</div>
+        <span>BillFlow</span>
+      </div>
+      <nav class="nav">
+        <button class="active" data-view="dashboard">▦ <span>Dashboard</span></button>
+        <button data-view="create-invoice">＋ <span>Create Invoice</span></button>
+        <button data-view="invoices">▤ <span>Invoices</span><small id="nav-invoices-badge">3</small></button>
+        <button data-view="customers">♙ <span>Customers</span></button>
+        <button data-view="products">▣ <span>Products & Services</span></button>
+        <button data-view="settings">⚙ <span>Business Settings</span></button>
+      </nav>
+      <div class="side-note">
+        <strong>BillFlow System</strong><br>
+        Universal billing for retail, services, wholesale & stationery.<br><br>
+        <span style="color:#22c55e">● Storage active & isolated</span>
+      </div>
+    </aside>
+
+    <!-- Main Content Canvas -->
+    <main class="main">
+      <!-- Top Header Bar -->
+      <header class="top">
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <button class="btn mobile-menu" onclick="toggleMenu()" aria-label="Toggle menu">☰</button>
+          <div>
+            <h1>Good morning 👋</h1>
+            <p>Manage your business billing, customers and products from one place.</p>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn" id="header-btn-customer">＋ Customer</button>
+          <button class="btn primary" id="header-btn-invoice">＋ Create Invoice</button>
+        </div>
+      </header>
+
+      <!-- VIEW 1: DASHBOARD -->
+      <div class="view active" id="view-dashboard">
+        <!-- Stats Row -->
+        <section class="stats">
+          <div class="card stat">
+            <span class="stat-icon">💰</span>
+            <div class="value" id="stat-today-sales">₹0.00</div>
+            <p class="muted">Today's sales</p>
+          </div>
+          <div class="card stat">
+            <span class="stat-icon">🧾</span>
+            <div class="value" id="stat-total-invoices">0</div>
+            <p class="muted">Total invoices</p>
+          </div>
+          <div class="card stat">
+            <span class="stat-icon">✓</span>
+            <div class="value" id="stat-paid-amount">₹0.00</div>
+            <p class="muted">Paid amount</p>
+          </div>
+          <div class="card stat">
+            <span class="stat-icon">◷</span>
+            <div class="value" id="stat-pending-amount">₹0.00</div>
+            <p class="muted">Pending payments</p>
+          </div>
+        </section>
+
+        <!-- Recent Invoices Table Card -->
+        <section class="card panel">
+          <div class="panel-head">
+            <div>
+              <h2>Recent invoices</h2>
+              <span class="muted">Your latest billing activity</span>
+            </div>
+            <button class="btn" onclick="document.querySelector('.nav button[data-view=invoices]').click()">View all</button>
+          </div>
+          <div class="table-container">
+            <table class="invoice-list">
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Customer</th>
+                  <th>Items</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="dashboard-recent-tbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- VIEW 2: CREATE / EDIT INVOICE -->
+      <div class="view" id="view-create-invoice">
+        <div class="grid">
+          <!-- Left Column: Form -->
+          <section class="card panel invoice-editor-column">
+            <div class="panel-head">
+              <div>
+                <h2 id="invoice-form-title">Create a new invoice</h2>
+                <span class="muted">Universal product/service billing</span>
+              </div>
+              <span class="tag">Invoice Editor</span>
+            </div>
+
+            <!-- Business Header Card -->
+            <div class="business-card">
+              <div class="business-row">
+                <div>
+                  <div class="business-name display-business-name">Apex Retailers & Co.</div>
+                  <div class="muted display-business-address" style="font-size:12px">Connaught Place, New Delhi</div>
+                  <div class="muted display-business-phone" style="font-size:12px"></div>
+                </div>
+                <span class="tag display-business-gstin">GST Enabled</span>
+              </div>
+            </div>
+
+            <!-- Customer & Invoice Meta Details -->
+            <div class="form-grid">
+              <div class="field form-full">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                  <label style="margin:0">SELECT CUSTOMER</label>
+                  <button type="button" class="btn btn-sm" id="btn-quick-add-customer" style="padding:2px 8px;font-size:11px">＋ New Customer</button>
+                </div>
+                <select id="inv-customer-select">
+                  <option value="">-- Select Existing Customer --</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label>CUSTOMER NAME *</label>
+                <input id="inv-customer-name" placeholder="Customer / Company Name">
+              </div>
+
+              <div class="field">
+                <label>CUSTOMER PHONE</label>
+                <input id="inv-customer-phone" placeholder="e.g. +91 98765 43210">
+              </div>
+
+              <div class="field form-full">
+                <label>CUSTOMER ADDRESS</label>
+                <input id="inv-customer-address" placeholder="Billing Address / City">
+              </div>
+
+              <div class="field">
+                <label>INVOICE NUMBER</label>
+                <input id="inv-number" value="INV-1029">
+              </div>
+
+              <div class="field">
+                <label>INVOICE DATE</label>
+                <input type="date" id="inv-date">
+              </div>
+
+              <div class="field">
+                <label>DUE DATE</label>
+                <input type="date" id="inv-due-date">
+              </div>
+
+              <div class="field">
+                <label>PAYMENT METHOD</label>
+                <select id="inv-payment-method">
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI</option>
+                  <option value="Card">Card</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Line Items Table -->
+            <div class="items-card">
+              <div class="items-header">
+                <strong style="font-size:13px">PRODUCTS & SERVICES</strong>
+                <button type="button" class="btn btn-sm" id="btn-add-line-item">＋ Add Item</button>
+              </div>
+              <div class="table-container">
+                <table class="items-table">
+                  <thead>
+                    <tr>
+                      <th>Item</th>
+                      <th>SKU</th>
+                      <th>Qty</th>
+                      <th>Price (₹)</th>
+                      <th style="text-align:right">Total</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="line-items-tbody">
+                    <!-- Populated dynamically with rows -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Discount, Tax, & Payment Status -->
+            <div class="form-grid" style="margin-top:16px">
+              <div class="field">
+                <label>DISCOUNT</label>
+                <div style="display:flex;gap:6px">
+                  <input type="number" id="inv-discount-value" min="0" value="0" style="flex:1">
+                  <select id="inv-discount-type" style="width:75px">
+                    <option value="percent">%</option>
+                    <option value="fixed">₹</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="field">
+                <label>GST / TAX</label>
+                <select id="inv-tax-rate">
+                  <option value="18">GST 18%</option>
+                  <option value="12">GST 12%</option>
+                  <option value="5">GST 5%</option>
+                  <option value="28">GST 28%</option>
+                  <option value="0">No Tax (0%)</option>
+                  <option value="custom">Custom %</option>
+                </select>
+                <input type="number" id="inv-custom-tax" placeholder="Custom tax %" style="display:none;margin-top:6px" min="0" max="100" step="any">
+              </div>
+
+              <div class="field">
+                <label>PAYMENT STATUS</label>
+                <select id="inv-payment-status">
+                  <option value="Paid">Paid</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Partial">Partial</option>
+                </select>
+              </div>
+
+              <div class="field" id="inv-paid-amount-field" style="display:none">
+                <label>AMOUNT PAID (₹)</label>
+                <input type="number" id="inv-paid-amount" min="0" step="any" placeholder="Enter amount paid">
+              </div>
+
+              <div class="field form-full">
+                <label>NOTES & TERMS</label>
+                <textarea id="inv-notes" placeholder="e.g. Payment due within 7 days. Thank you for your business!"></textarea>
+              </div>
+            </div>
+
+            <!-- Calculations Summary Panel -->
+            <div class="calc-summary">
+              <div class="calc-row">
+                <span>Subtotal:</span>
+                <strong id="calc-subtotal">₹0.00</strong>
+              </div>
+              <div class="calc-row">
+                <span>Discount:</span>
+                <span id="calc-discount" style="color:var(--danger)">-₹0.00</span>
+              </div>
+              <div class="calc-row">
+                <span>GST / Tax:</span>
+                <span id="calc-tax">₹0.00</span>
+              </div>
+              <div class="calc-row grand-total">
+                <span>Grand Total:</span>
+                <span id="calc-grand-total">₹0.00</span>
+              </div>
+              <div class="calc-row balance" id="calc-balance-row" style="display:none">
+                <span>Balance Due:</span>
+                <span id="calc-balance">₹0.00</span>
+              </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px">
+              <button type="button" class="btn secondary" id="btn-cancel-edit" style="display:none">Cancel Edit</button>
+              <button type="button" class="btn" id="btn-save-draft">Save Draft</button>
+              <button type="button" class="btn primary" id="btn-save-invoice">Generate Invoice →</button>
+            </div>
+          </section>
+
+          <!-- Right Column: Live Invoice Preview -->
+          <section class="card panel">
+            <div class="panel-head">
+              <div>
+                <h2>Invoice Preview</h2>
+                <span class="muted">Live real-time preview</span>
+              </div>
+              <span class="tag">PDF / Print Ready</span>
+            </div>
+
+            <div class="preview" id="live-invoice-preview">
+              <!-- Live Preview Content Rendered Here -->
+            </div>
+
+            <div class="quick">
+              <button type="button" id="preview-btn-pdf">
+                📄<strong>Download PDF</strong>
+                <span class="muted">Save professional PDF</span>
+              </button>
+              <button type="button" id="preview-btn-print">
+                🖨️<strong>Print Invoice</strong>
+                <span class="muted">Print directly to paper</span>
+              </button>
+              <button type="button" id="preview-btn-whatsapp">
+                💬<strong>Share on WhatsApp</strong>
+                <span class="muted">Send invoice text</span>
+              </button>
+              <button type="button" id="preview-btn-email">
+                ✉️<strong>Email Invoice</strong>
+                <span class="muted">Send details via email</span>
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- VIEW 3: INVOICES HISTORY -->
+      <div class="view" id="view-invoices">
+        <section class="card panel">
+          <div class="panel-head">
+            <div>
+              <h2>Invoice History</h2>
+              <span class="muted">Browse, manage, and filter all issued invoices</span>
+            </div>
+            <button class="btn primary" onclick="document.querySelector('.nav button[data-view=create-invoice]').click()">＋ Create Invoice</button>
+          </div>
+
+          <div class="toolbar">
+            <div class="search-box">
+              <span>🔍</span>
+              <input type="text" id="invoices-search" placeholder="Search by Invoice # or Customer name...">
+            </div>
+            <select class="filter-select" id="invoices-status-filter">
+              <option value="all">All Statuses</option>
+              <option value="Paid">Paid</option>
+              <option value="Pending">Pending</option>
+              <option value="Partial">Partial</option>
+              <option value="Draft">Draft</option>
+            </select>
+          </div>
+
+          <div class="table-container">
+            <table class="invoice-list">
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Customer</th>
+                  <th>Date</th>
+                  <th>Items</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="invoices-tbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- VIEW 4: CUSTOMERS -->
+      <div class="view" id="view-customers">
+        <section class="card panel">
+          <div class="panel-head">
+            <div>
+              <h2>Customer Directory</h2>
+              <span class="muted">Manage customer records and view individual billing histories</span>
+            </div>
+            <button class="btn primary" id="btn-add-customer">＋ Add Customer</button>
+          </div>
+
+          <div class="toolbar">
+            <div class="search-box">
+              <span>🔍</span>
+              <input type="text" id="customer-search" placeholder="Search customers by name, phone or email...">
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="invoice-list">
+              <thead>
+                <tr>
+                  <th>Customer Name</th>
+                  <th>Phone</th>
+                  <th>Email</th>
+                  <th>Address</th>
+                  <th>Invoices</th>
+                  <th>Total Billed</th>
+                  <th>Pending Balance</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="customers-tbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- VIEW 5: PRODUCTS & SERVICES -->
+      <div class="view" id="view-products">
+        <section class="card panel">
+          <div class="panel-head">
+            <div>
+              <h2>Products & Services Catalog</h2>
+              <span class="muted">Manage your inventory, pricing, and services</span>
+            </div>
+            <button class="btn primary" id="btn-add-product">＋ Add Product / Service</button>
+          </div>
+
+          <div class="toolbar">
+            <div class="search-box">
+              <span>🔍</span>
+              <input type="text" id="product-search" placeholder="Search by item name or SKU...">
+            </div>
+            <select class="filter-select" id="product-category-filter">
+              <option value="all">All Categories</option>
+            </select>
+          </div>
+
+          <div class="table-container">
+            <table class="invoice-list">
+              <thead>
+                <tr>
+                  <th>Item Name</th>
+                  <th>Type</th>
+                  <th>SKU / Code</th>
+                  <th>Category</th>
+                  <th>Price</th>
+                  <th>Stock</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="products-tbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- VIEW 6: BUSINESS SETTINGS -->
+      <div class="view" id="view-settings">
+        <section class="card panel" style="max-width:850px;margin:0 auto">
+          <div class="panel-head">
+            <div>
+              <h2>Business Setup & Settings</h2>
+              <span class="muted">Configure your business profile, invoice numbers, and preferences</span>
+            </div>
+            <span class="tag">Configuration</span>
+          </div>
+
+          <form id="form-settings">
+            <div class="form-grid">
+              <div class="field">
+                <label>BUSINESS NAME *</label>
+                <input id="setting-business-name" required placeholder="e.g. Apex Retailers & Co.">
+              </div>
+
+              <div class="field">
+                <label>OWNER / CONTACT NAME</label>
+                <input id="setting-owner-name" placeholder="e.g. Deepak Sharma">
+              </div>
+
+              <div class="field">
+                <label>PHONE NUMBER</label>
+                <input id="setting-phone" placeholder="e.g. +91 98765 43210">
+              </div>
+
+              <div class="field">
+                <label>GSTIN (OPTIONAL)</label>
+                <input id="setting-gstin" placeholder="e.g. 07AAAAA0000A1Z5">
+              </div>
+
+              <div class="field form-full">
+                <label>BUSINESS ADDRESS</label>
+                <input id="setting-address" placeholder="e.g. Shop 12, Main Market, Connaught Place, New Delhi">
+              </div>
+
+              <div class="field">
+                <label>INVOICE PREFIX</label>
+                <input id="setting-prefix" placeholder="e.g. INV-">
+              </div>
+
+              <div class="field">
+                <label>NEXT INVOICE NUMBER</label>
+                <input type="number" id="setting-next-number" min="1" placeholder="1029">
+              </div>
+
+              <div class="field">
+                <label>CURRENCY SYMBOL</label>
+                <input id="setting-currency" placeholder="₹" value="₹">
+              </div>
+
+              <div class="field">
+                <label>DATA ISOLATION / PROFILE</label>
+                <div style="display:flex;gap:8px">
+                  <select id="settings-profile-select" style="flex:1">
+                    <!-- Populated dynamically -->
+                  </select>
+                  <button type="button" class="btn btn-sm" id="btn-create-profile" style="white-space:nowrap">＋ New Profile</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;margin-top:20px">
+              <button type="submit" class="btn primary">Save Business Settings</button>
+            </div>
+          </form>
+
+          <!-- Data Backup & Persistence Section -->
+          <div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--line)">
+            <h3 style="margin:0 0 6px;font-size:16px">Data Persistence & Backup</h3>
+            <p class="muted" style="margin-bottom:14px">Export your billing records to JSON for backup or restore them onto any device.</p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <button type="button" class="btn" id="btn-export-backup">💾 Export All Data (JSON)</button>
+              <label class="btn" style="cursor:pointer">
+                📂 Import Data (JSON)
+                <input type="file" id="input-import-backup" accept=".json" style="display:none">
+              </label>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="footer">
+        BillFlow • Universal Business Billing System
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL: ADD / EDIT PRODUCT -->
+  <div class="modal-backdrop" id="modal-product">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="modal-product-title">Add Product / Service</h3>
+        <button type="button" class="btn-close" onclick="closeModal('modal-product')">✕</button>
+      </div>
+      <form id="form-product">
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="field form-full">
+              <label>NAME / TITLE *</label>
+              <input id="prod-name" required placeholder="e.g. Python Programming Book">
+            </div>
+
+            <div class="field">
+              <label>TYPE</label>
+              <select id="prod-type">
+                <option value="product">Product (Inventory)</option>
+                <option value="service">Service</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>SKU / CODE (OPTIONAL)</label>
+              <input id="prod-sku" placeholder="e.g. BK-01">
+            </div>
+
+            <div class="field">
+              <label>CATEGORY</label>
+              <input id="prod-category" placeholder="e.g. Books, Stationery, Services">
+            </div>
+
+            <div class="field">
+              <label>UNIT PRICE (₹) *</label>
+              <input type="number" id="prod-price" min="0" step="any" required placeholder="0.00">
+            </div>
+
+            <div class="field form-full" id="prod-stock-field">
+              <label>QUANTITY / STOCK</label>
+              <input type="number" id="prod-stock" min="0" step="1" value="10" placeholder="Available stock">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" onclick="closeModal('modal-product')">Cancel</button>
+          <button type="submit" class="btn primary">Save Item</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD / EDIT CUSTOMER -->
+  <div class="modal-backdrop" id="modal-customer">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="modal-customer-title">Add Customer</h3>
+        <button type="button" class="btn-close" onclick="closeModal('modal-customer')">✕</button>
+      </div>
+      <form id="form-customer">
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="field form-full">
+              <label>CUSTOMER NAME *</label>
+              <input id="cust-name" required placeholder="Full Name / Company Name">
+            </div>
+
+            <div class="field">
+              <label>PHONE NUMBER *</label>
+              <input id="cust-phone" required placeholder="e.g. +91 98765 43210">
+            </div>
+
+            <div class="field">
+              <label>EMAIL (OPTIONAL)</label>
+              <input type="email" id="cust-email" placeholder="customer@example.com">
+            </div>
+
+            <div class="field form-full">
+              <label>ADDRESS (OPTIONAL)</label>
+              <textarea id="cust-address" placeholder="Billing address / city / state"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" onclick="closeModal('modal-customer')">Cancel</button>
+          <button type="submit" class="btn primary">Save Customer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: CUSTOMER BILLING HISTORY -->
+  <div class="modal-backdrop" id="modal-customer-history">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <div>
+          <h3 id="history-customer-name">Customer Billing History</h3>
+          <span class="muted" id="history-customer-details" style="font-size:12px"></span>
+        </div>
+        <button type="button" class="btn-close" onclick="closeModal('modal-customer-history')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px">
+          <div class="card stat" style="padding:12px">
+            <span class="muted" style="font-size:11px">TOTAL BILLS</span>
+            <div class="value" id="history-total-invoices" style="font-size:20px;margin:4px 0 0">0</div>
+          </div>
+          <div class="card stat" style="padding:12px">
+            <span class="muted" style="font-size:11px">TOTAL BILLED</span>
+            <div class="value" id="history-total-billed" style="font-size:20px;margin:4px 0 0">₹0.00</div>
+          </div>
+          <div class="card stat" style="padding:12px">
+            <span class="muted" style="font-size:11px">PAID AMOUNT</span>
+            <div class="value" id="history-total-paid" style="font-size:20px;margin:4px 0 0">₹0.00</div>
+          </div>
+          <div class="card stat" style="padding:12px">
+            <span class="muted" style="font-size:11px">OUTSTANDING</span>
+            <div class="value" id="history-total-pending" style="font-size:20px;margin:4px 0 0;color:var(--warning)">₹0.00</div>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="invoice-list">
+            <thead>
+              <tr>
+                <th>Invoice #</th>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="history-invoices-tbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="closeModal('modal-customer-history')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: FULL INVOICE PREVIEW / PRINT -->
+  <div class="modal-backdrop" id="modal-invoice-preview">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3>Invoice Details</h3>
+        <button type="button" class="btn-close" onclick="closeModal('modal-invoice-preview')">✕</button>
+      </div>
+      <div class="modal-body printable-area" id="modal-invoice-preview-body">
+        <!-- Rendered invoice printable document -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="closeModal('modal-invoice-preview')">Close</button>
+        <button type="button" class="btn primary" onclick="window.printInvoiceModal()">🖨️ Print / Save PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CREATE BUSINESS PROFILE -->
+  <div class="modal-backdrop" id="modal-new-profile">
+    <div class="modal-dialog" style="max-width:420px">
+      <div class="modal-header">
+        <h3>Create Business Profile</h3>
+        <button type="button" class="btn-close" onclick="closeModal('modal-new-profile')">✕</button>
+      </div>
+      <form id="form-new-profile">
+        <div class="modal-body">
+          <div class="field">
+            <label>BUSINESS / PROFILE NAME *</label>
+            <input id="new-profile-name" required placeholder="e.g. Branch Mumbai, Second Venture">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" onclick="closeModal('modal-new-profile')">Cancel</button>
+          <button type="submit" class="btn primary">Create Profile</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
