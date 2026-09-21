@@ -339,6 +339,7 @@ button, input, select, textarea {
 }
 
 .btn-sidebar-toggle {
+  display: none; /* Hidden on laptop/desktop: sidebar is permanent */
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #cbd5e1;
@@ -348,7 +349,6 @@ button, input, select, textarea {
   height: 32px;
   border-radius: 8px;
   cursor: pointer;
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
@@ -361,13 +361,13 @@ button, input, select, textarea {
 }
 
 .btn-sidebar-toggle-main {
+  display: none; /* Hidden on laptop/desktop: full menu is already visible on left */
   font-size: 20px;
   font-weight: 900;
   padding: 7px 12px;
   line-height: 1;
   cursor: pointer;
   border-radius: 9px;
-  display: inline-flex;
   align-items: center;
   justify-content: center;
 }
@@ -1164,42 +1164,68 @@ body.sidebar-collapsed .main {
 
 /* --- LAPTOP & DESKTOP SCREENS (1024px and wider) --- */
 @media (min-width: 1024px) {
+  /* Hide all 3-dot hamburger buttons on desktop: the full sidebar is permanent */
+  .btn-sidebar-toggle,
+  .btn-sidebar-toggle-main {
+    display: none !important;
+  }
+
   .sidebar {
-    width: 245px;
-    transform: translateX(0) !important;
-    position: fixed;
-    inset: 0 auto 0 0;
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    width: 245px !important;
+    transform: none !important;
+    display: flex !important;
+    z-index: 100 !important;
   }
+
   .main {
-    margin-left: 245px;
-    width: calc(100% - 245px);
-    padding: 28px 36px;
+    margin-left: 245px !important;
+    width: calc(100% - 245px) !important;
+    padding: 28px 36px !important;
   }
+
+  /* Prevent any collapsed sidebar state on desktop/laptop */
+  body.sidebar-collapsed .sidebar {
+    transform: none !important;
+  }
+
+  body.sidebar-collapsed .main {
+    margin-left: 245px !important;
+    width: calc(100% - 245px) !important;
+  }
+
   .sidebar-backdrop,
   .mobile-bottom-nav {
     display: none !important;
   }
+
   .grid {
     grid-template-columns: 1.15fr 0.85fr;
     gap: 24px;
     align-items: start;
   }
+
   .preview {
     position: sticky;
     top: 24px;
   }
+
   .stats {
     grid-template-columns: repeat(4, 1fr);
     gap: 18px;
   }
+
   .analysis-stats-row {
     grid-template-columns: repeat(4, 1fr) !important;
     gap: 16px;
   }
+
   .analysis-charts-grid {
     grid-template-columns: 1.2fr 0.8fr !important;
     gap: 20px;
   }
+
   .analysis-secondary-grid {
     grid-template-columns: 1fr 1fr !important;
     gap: 20px;
@@ -1208,31 +1234,54 @@ body.sidebar-collapsed .main {
 
 /* --- TABLET SCREENS (769px to 1023px) --- */
 @media (min-width: 769px) and (max-width: 1023px) {
+  .btn-sidebar-toggle,
+  .btn-sidebar-toggle-main {
+    display: none !important;
+  }
+
   .sidebar {
-    width: 220px;
-    transform: translateX(0);
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    width: 220px !important;
+    transform: none !important;
+    display: flex !important;
   }
+
   .main {
-    margin-left: 220px;
-    width: calc(100% - 220px);
-    padding: 20px;
+    margin-left: 220px !important;
+    width: calc(100% - 220px) !important;
+    padding: 20px !important;
   }
+
+  body.sidebar-collapsed .sidebar {
+    transform: none !important;
+  }
+
+  body.sidebar-collapsed .main {
+    margin-left: 220px !important;
+    width: calc(100% - 220px) !important;
+  }
+
   .sidebar-backdrop,
   .mobile-bottom-nav {
     display: none !important;
   }
+
   .grid {
     grid-template-columns: 1fr;
     gap: 20px;
   }
+
   .stats {
     grid-template-columns: repeat(2, 1fr);
     gap: 14px;
   }
+
   .analysis-stats-row {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 14px;
   }
+
   .analysis-charts-grid,
   .analysis-secondary-grid {
     grid-template-columns: 1fr !important;

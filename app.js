@@ -4212,18 +4212,12 @@
       return;
     }
 
-    // Desktop/Laptop collapse
-    if (typeof forceState === 'boolean') {
-      if (forceState) document.body.classList.add('sidebar-collapsed');
-      else document.body.classList.remove('sidebar-collapsed');
-    } else {
-      document.body.classList.toggle('sidebar-collapsed');
-    }
-
+    // On laptop and desktop screens: keep sidebar permanently visible and open
+    document.body.classList.remove('sidebar-collapsed');
+    if (sidebar) sidebar.classList.remove('open');
     if (backdrop) backdrop.classList.remove('show');
     document.body.style.overflow = '';
-    const isCollapsed = document.body.classList.contains('sidebar-collapsed');
-    localStorage.setItem('billflow_sidebar_collapsed', isCollapsed ? 'true' : 'false');
+    localStorage.removeItem('billflow_sidebar_collapsed');
   };
 
   window.toggleMenu = function () {
@@ -5866,10 +5860,9 @@
   document.addEventListener('DOMContentLoaded', () => {
     ThemeManager.init();
 
-    // Restore sidebar preference
-    if (localStorage.getItem('billflow_sidebar_collapsed') === 'true' && window.innerWidth > 720) {
-      document.body.classList.add('sidebar-collapsed');
-    }
+    // Ensure on laptop / desktop screen the full sidebar is always open and never collapsed
+    document.body.classList.remove('sidebar-collapsed');
+    localStorage.removeItem('billflow_sidebar_collapsed');
 
     Navigation.init();
     AuthController.init();
