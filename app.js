@@ -4686,52 +4686,32 @@
       }
     },
 
-    async startAudioVisualizer() {
-      try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        this.microphoneStream = stream;
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return;
-        this.audioContext = new AudioCtx();
-        const source = this.audioContext.createMediaStreamSource(stream);
-        this.analyser = this.audioContext.createAnalyser();
-        this.analyser.fftSize = 64;
-        source.connect(this.analyser);
-
-        const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-        const bars = document.querySelectorAll('.voice-wave-bars .wave-bar');
-
-        const updateBars = () => {
-          if (!this.isListening || !this.analyser) return;
-          this.analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-          const avg = sum / dataArray.length;
-
-          bars.forEach((bar, idx) => {
-            const val = (dataArray[idx * 2] || avg) / 255;
-            const height = Math.max(6, Math.min(30, val * 35));
-            bar.style.height = `${height}px`;
-            bar.style.opacity = Math.max(0.4, val * 1.5);
-          });
-
-          this.animFrameId = requestAnimationFrame(updateBars);
-        };
-        updateBars();
-      } catch (err) {
-        console.warn('Audio visualizer stream fallback', err);
+    startAudioVisualizer() {
+      // Pure CSS sound wave animation: avoids getUserMedia hardware conflict on Android Chrome
+      const waveBars = document.getElementById('voice-wave-bars');
+      if (waveBars) {
+        waveBars.style.display = 'flex';
       }
     },
 
     stopAudioVisualizer() {
-      if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
+      const waveBars = document.getElementById('voice-wave-bars');
+      if (waveBars) {
+        waveBars.style.display = 'none';
+      }
+      if (this.animFrameId) {
+        cancelAnimationFrame(this.animFrameId);
+        this.animFrameId = null;
+      }
       if (this.microphoneStream) {
-        this.microphoneStream.getTracks().forEach(t => t.stop());
+        try {
+          this.microphoneStream.getTracks().forEach(t => t.stop());
+        } catch (e) {}
         this.microphoneStream = null;
       }
       if (this.audioContext && this.audioContext.state !== 'closed') {
         try { this.audioContext.close(); } catch (e) {}
+        this.audioContext = null;
       }
     },
 
