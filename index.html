@@ -730,7 +730,18 @@
                 <span class="mic-pulse-ring"></span>
               </button>
 
-              <div class="voice-status-text" id="voice-status-label">Tap Microphone to Speak / बोलने के लिए माइक दबाएं</div>
+              <div class="voice-status-text" id="voice-status-label">Tap Microphone to Speak / 20 सेकंड तक आराम से बोलें</div>
+
+              <!-- 20-Second Recording Countdown Badge & Progress Bar -->
+              <div id="voice-countdown-box" style="display:none;margin-top:10px;width:100%;max-width:360px">
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:#ef4444;margin-bottom:4px">
+                  <span id="voice-timer-text">⏱️ 20s remaining... (बोलते रहें)</span>
+                  <button type="button" class="btn btn-sm" id="btn-voice-stop-early" style="background:#ef4444;color:#fff;border:none;padding:2px 8px;font-size:11px;border-radius:12px">⏹️ Done (Stop)</button>
+                </div>
+                <div style="width:100%;height:6px;background:rgba(239,68,68,0.2);border-radius:3px;overflow:hidden">
+                  <div id="voice-timer-progress-bar" style="width:100%;height:100%;background:#ef4444;transition:width 1s linear"></div>
+                </div>
+              </div>
 
               <!-- Animated Sound Wave Bars (shown while listening) -->
               <div class="voice-wave-bars" id="voice-wave-bars" style="display:none">

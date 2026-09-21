@@ -4238,6 +4238,9 @@
     microphoneStream: null,
     animFrameId: null,
     targetInput: 'voice', // 'voice' or 'ai'
+    countdownTimer: null,
+    secondsRemaining: 20,
+    TOTAL_SECONDS: 20,
 
     init() {
       this.bindEvents();
@@ -4312,17 +4315,23 @@
             if (statusLabel) {
               statusLabel.innerHTML = '<span style="color:#ef4444">⚠️ Mic permission denied. Please allow microphone in browser settings.</span>';
             }
+            this.stopListening();
           }
-          this.stopListening();
         };
 
         this.recognition.onend = () => {
-          if (this.isListening) {
-            try {
-              this.recognition.start();
-              return;
-            } catch (e) {}
+          // If still within the 20-second active listening window, automatically restart to prevent cutoffs!
+          if (this.isListening && this.secondsRemaining > 0) {
+            setTimeout(() => {
+              if (this.isListening && this.secondsRemaining > 0) {
+                try {
+                  this.recognition.start();
+                } catch (e) {}
+              }
+            }, 100);
+            return;
           }
+
           this.isListening = false;
           this.updateListeningUI(false);
           this.stopAudioVisualizer();
@@ -4406,6 +4415,15 @@
         btnMic.addEventListener('click', () => {
           this.targetInput = 'voice';
           this.toggleListening();
+        });
+      }
+
+      // Early Stop / Done button in Countdown Box
+      const btnStopEarly = document.getElementById('btn-voice-stop-early');
+      if (btnStopEarly && !btnStopEarly.dataset.bound) {
+        btnStopEarly.dataset.bound = 'true';
+        btnStopEarly.addEventListener('click', () => {
+          this.stopListening();
         });
       }
 
@@ -4547,25 +4565,82 @@
           return;
         }
       }
+
+      this.isListening = true;
+      this.secondsRemaining = this.TOTAL_SECONDS;
+      this.startCountdownTimer();
+
       try {
-        this.isListening = true;
         this.recognition.start();
       } catch (e) {
-        console.warn('Speech start error (retrying):', e);
+        console.warn('Speech start retry:', e);
         try {
           this.recognition.stop();
           setTimeout(() => {
             if (this.isListening) this.recognition.start();
-          }, 200);
+          }, 150);
         } catch (err) {}
       }
     },
 
+    startCountdownTimer() {
+      if (this.countdownTimer) clearInterval(this.countdownTimer);
+
+      const countBox = document.getElementById('voice-countdown-box');
+      const timerText = document.getElementById('voice-timer-text');
+      const progBar = document.getElementById('voice-timer-progress-bar');
+
+      if (countBox && this.targetInput === 'voice') {
+        countBox.style.display = 'block';
+      }
+
+      if (timerText) {
+        timerText.textContent = `⏱️ ${this.secondsRemaining}s remaining... (आराम से बोलते रहें)`;
+      }
+      if (progBar) {
+        progBar.style.width = '100%';
+      }
+
+      this.countdownTimer = setInterval(() => {
+        this.secondsRemaining--;
+
+        if (timerText) {
+          timerText.textContent = `⏱️ ${this.secondsRemaining}s remaining... (आराम से बोलते रहें)`;
+        }
+        if (progBar) {
+          const pct = Math.max(0, (this.secondsRemaining / this.TOTAL_SECONDS) * 100);
+          progBar.style.width = `${pct}%`;
+        }
+
+        const aiMicBtn = document.getElementById('ai-btn-mic-prompt');
+        if (aiMicBtn && this.targetInput === 'ai') {
+          aiMicBtn.innerHTML = `🔴 <span>Listening (${this.secondsRemaining}s)</span>`;
+        }
+
+        if (this.secondsRemaining <= 0) {
+          clearInterval(this.countdownTimer);
+          this.countdownTimer = null;
+          this.stopListening();
+        }
+      }, 1000);
+    },
+
     stopListening() {
       this.isListening = false;
+      this.secondsRemaining = 0;
+
+      if (this.countdownTimer) {
+        clearInterval(this.countdownTimer);
+        this.countdownTimer = null;
+      }
+
+      const countBox = document.getElementById('voice-countdown-box');
+      if (countBox) countBox.style.display = 'none';
+
       if (this.recognition) {
         try { this.recognition.stop(); } catch (e) {}
       }
+
       this.updateListeningUI(false);
       this.stopAudioVisualizer();
 
@@ -4597,18 +4672,18 @@
       if (listening) {
         if (btn) btn.classList.add('listening');
         if (icon) icon.textContent = '🔴';
-        if (label) label.textContent = 'Listening... बोलिए (बोलना जारी रखें...)';
+        if (label) label.textContent = 'Listening (20s Window)... आराम से पूरा बोलें';
         if (waveBars) waveBars.style.display = 'flex';
         if (aiMicBtn) {
           aiMicBtn.style.background = '#fee2e2';
           aiMicBtn.style.borderColor = '#ef4444';
           aiMicBtn.style.color = '#b91c1c';
-          aiMicBtn.innerHTML = '🔴 <span>Listening...</span>';
+          aiMicBtn.innerHTML = '🔴 <span>Listening (20s)...</span>';
         }
       } else {
         if (btn) btn.classList.remove('listening');
         if (icon) icon.textContent = '🎙️';
-        if (label) label.textContent = 'Tap Microphone to Speak / बोलने के लिए माइक दबाएं';
+        if (label) label.textContent = 'Tap Microphone to Speak / 20 सेकंड तक आराम से बोलें';
         if (waveBars) waveBars.style.display = 'none';
         if (aiMicBtn) {
           aiMicBtn.style.background = '#ede9fe';
