@@ -4233,6 +4233,11 @@
     isListening: false,
     currentLang: 'hi-IN',
     activeDraft: null,
+    audioContext: null,
+    analyser: null,
+    microphoneStream: null,
+    animFrameId: null,
+    targetInput: 'voice', // 'voice' or 'ai'
 
     init() {
       this.bindEvents();
@@ -4245,61 +4250,173 @@
         console.warn('Web Speech API is not supported in this browser.');
         const statusLabel = document.getElementById('voice-status-label');
         if (statusLabel) {
-          statusLabel.textContent = 'Speech recognition not supported in this browser. Type below or use Chrome/Edge.';
+          statusLabel.innerHTML = '⚠️ <em>Speech recognition is supported in Google Chrome, Edge, and Android Chrome. You can also type or use sample chips below.</em>';
         }
         return;
       }
 
-      this.recognition = new SpeechRecognition();
-      this.recognition.continuous = true;
-      this.recognition.interimResults = true;
-      this.recognition.lang = this.currentLang;
+      try {
+        this.recognition = new SpeechRecognition();
+        this.recognition.continuous = true;
+        this.recognition.interimResults = true;
+        this.recognition.maxAlternatives = 1;
+        this.recognition.lang = this.currentLang;
 
-      this.recognition.onstart = () => {
-        this.isListening = true;
-        this.updateListeningUI(true);
-      };
+        this.recognition.onstart = () => {
+          this.isListening = true;
+          this.updateListeningUI(true);
+          this.startAudioVisualizer();
+        };
 
-      this.recognition.onresult = (event) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
+        this.recognition.onresult = (event) => {
+          let interimTranscript = '';
+          let finalTranscript = '';
 
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript + ' ';
-          } else {
-            interimTranscript += event.results[i][0].transcript;
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              finalTranscript += transcript + ' ';
+            } else {
+              interimTranscript += transcript;
+            }
           }
-        }
 
-        const textarea = document.getElementById('voice-transcript-textarea');
-        if (textarea) {
+          const isVoiceTarget = this.targetInput === 'voice';
+          const textarea = document.getElementById(isVoiceTarget ? 'voice-transcript-textarea' : 'ai-prompt-input');
+          const interimBox = document.getElementById('voice-live-interim-box');
+          const interimText = document.getElementById('voice-interim-text');
+
+          if (interimTranscript) {
+            if (interimBox && interimText && isVoiceTarget) {
+              interimBox.style.display = 'block';
+              interimText.textContent = `"${interimTranscript.trim()}"`;
+            }
+          }
+
           if (finalTranscript) {
-            textarea.value = (textarea.value + ' ' + finalTranscript).trim();
+            if (textarea) {
+              const prev = textarea.value.trim();
+              textarea.value = prev ? `${prev}, ${finalTranscript.trim()}` : finalTranscript.trim();
+            }
+            if (interimBox && interimText && isVoiceTarget) {
+              interimText.textContent = `"${finalTranscript.trim()}"`;
+            }
           }
-        }
-      };
+        };
 
-      this.recognition.onerror = (event) => {
-        console.warn('Speech recognition error:', event.error);
-        if (event.error === 'not-allowed') {
-          Toast.show('Microphone permission was denied. Please allow mic access in browser.', 'error');
-        }
-        this.stopListening();
-      };
+        this.recognition.onerror = (event) => {
+          console.warn('Speech recognition event error:', event.error);
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            Toast.show('Microphone access denied. Please allow microphone in browser.', 'error');
+            const statusLabel = document.getElementById('voice-status-label');
+            if (statusLabel) {
+              statusLabel.innerHTML = '<span style="color:#ef4444">⚠️ Mic permission denied. Please allow microphone in browser settings.</span>';
+            }
+          }
+          this.stopListening();
+        };
 
-      this.recognition.onend = () => {
-        this.isListening = false;
-        this.updateListeningUI(false);
-      };
+        this.recognition.onend = () => {
+          if (this.isListening) {
+            try {
+              this.recognition.start();
+              return;
+            } catch (e) {}
+          }
+          this.isListening = false;
+          this.updateListeningUI(false);
+          this.stopAudioVisualizer();
+
+          const interimBox = document.getElementById('voice-live-interim-box');
+          if (interimBox) interimBox.style.display = 'none';
+
+          if (this.targetInput === 'voice') {
+            const textarea = document.getElementById('voice-transcript-textarea');
+            if (textarea && textarea.value.trim().length >= 3) {
+              this.processVoiceBill();
+            }
+          } else if (this.targetInput === 'ai') {
+            const aiPrompt = document.getElementById('ai-prompt-input');
+            if (aiPrompt && aiPrompt.value.trim().length >= 3) {
+              if (typeof AiBillingController !== 'undefined') {
+                AiBillingController.handlePromptSubmit();
+              }
+            }
+          }
+        };
+      } catch (e) {
+        console.warn('Speech Engine init exception:', e);
+      }
+    },
+
+    async startAudioVisualizer() {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        this.microphoneStream = stream;
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        this.audioContext = new AudioCtx();
+        const source = this.audioContext.createMediaStreamSource(stream);
+        this.analyser = this.audioContext.createAnalyser();
+        this.analyser.fftSize = 64;
+        source.connect(this.analyser);
+
+        const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+        const bars = document.querySelectorAll('.voice-wave-bars .wave-bar');
+
+        const updateBars = () => {
+          if (!this.isListening || !this.analyser) return;
+          this.analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+          const avg = sum / dataArray.length;
+
+          bars.forEach((bar, idx) => {
+            const val = (dataArray[idx * 2] || avg) / 255;
+            const height = Math.max(6, Math.min(30, val * 35));
+            bar.style.height = `${height}px`;
+            bar.style.opacity = Math.max(0.4, val * 1.5);
+          });
+
+          this.animFrameId = requestAnimationFrame(updateBars);
+        };
+        updateBars();
+      } catch (err) {
+        console.warn('Audio visualizer stream fallback', err);
+      }
+    },
+
+    stopAudioVisualizer() {
+      if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
+      if (this.microphoneStream) {
+        this.microphoneStream.getTracks().forEach(t => t.stop());
+        this.microphoneStream = null;
+      }
+      if (this.audioContext && this.audioContext.state !== 'closed') {
+        try { this.audioContext.close(); } catch (e) {}
+      }
     },
 
     bindEvents() {
-      // Main Mic button
+      // Main Mic button in Voice Counter
       const btnMic = document.getElementById('btn-voice-mic-main');
       if (btnMic && !btnMic.dataset.bound) {
         btnMic.dataset.bound = 'true';
-        btnMic.addEventListener('click', () => this.toggleListening());
+        btnMic.addEventListener('click', () => {
+          this.targetInput = 'voice';
+          this.toggleListening();
+        });
+      }
+
+      // Mic button in AI Billing prompt bar
+      const btnAiMic = document.getElementById('ai-btn-mic-prompt');
+      if (btnAiMic && !btnAiMic.dataset.bound) {
+        btnAiMic.dataset.bound = 'true';
+        btnAiMic.addEventListener('click', () => {
+          this.targetInput = 'ai';
+          this.toggleListening();
+        });
       }
 
       // Language Switcher
@@ -4321,6 +4438,8 @@
         btnClear.addEventListener('click', () => {
           const textarea = document.getElementById('voice-transcript-textarea');
           if (textarea) textarea.value = '';
+          const interimBox = document.getElementById('voice-live-interim-box');
+          if (interimBox) interimBox.style.display = 'none';
           this.discardDraft();
         });
       }
@@ -4420,34 +4539,51 @@
       }
     },
 
-    startListening() {
+    async startListening() {
       if (!this.recognition) {
         this.initSpeechEngine();
         if (!this.recognition) {
-          Toast.show('Web Speech API is not supported in this browser. Please use Chrome or Edge.', 'error');
+          Toast.show('Speech recognition is not supported in this browser. Please use Chrome or Edge.', 'error');
           return;
         }
       }
       try {
+        this.isListening = true;
         this.recognition.start();
       } catch (e) {
-        console.warn('Speech start error', e);
+        console.warn('Speech start error (retrying):', e);
+        try {
+          this.recognition.stop();
+          setTimeout(() => {
+            if (this.isListening) this.recognition.start();
+          }, 200);
+        } catch (err) {}
       }
     },
 
     stopListening() {
-      if (this.recognition && this.isListening) {
-        try {
-          this.recognition.stop();
-        } catch (e) {}
-      }
       this.isListening = false;
+      if (this.recognition) {
+        try { this.recognition.stop(); } catch (e) {}
+      }
       this.updateListeningUI(false);
+      this.stopAudioVisualizer();
 
-      // Auto-process if text is available
-      const textarea = document.getElementById('voice-transcript-textarea');
-      if (textarea && textarea.value.trim().length > 3) {
-        this.processVoiceBill();
+      const interimBox = document.getElementById('voice-live-interim-box');
+      if (interimBox) interimBox.style.display = 'none';
+
+      if (this.targetInput === 'voice') {
+        const textarea = document.getElementById('voice-transcript-textarea');
+        if (textarea && textarea.value.trim().length >= 3) {
+          this.processVoiceBill();
+        }
+      } else if (this.targetInput === 'ai') {
+        const aiPrompt = document.getElementById('ai-prompt-input');
+        if (aiPrompt && aiPrompt.value.trim().length >= 3) {
+          if (typeof AiBillingController !== 'undefined') {
+            AiBillingController.handlePromptSubmit();
+          }
+        }
       }
     },
 
@@ -4456,27 +4592,43 @@
       const label = document.getElementById('voice-status-label');
       const waveBars = document.getElementById('voice-wave-bars');
       const icon = document.getElementById('voice-mic-icon');
+      const aiMicBtn = document.getElementById('ai-btn-mic-prompt');
 
       if (listening) {
         if (btn) btn.classList.add('listening');
         if (icon) icon.textContent = '🔴';
         if (label) label.textContent = 'Listening... बोलिए (बोलना जारी रखें...)';
         if (waveBars) waveBars.style.display = 'flex';
+        if (aiMicBtn) {
+          aiMicBtn.style.background = '#fee2e2';
+          aiMicBtn.style.borderColor = '#ef4444';
+          aiMicBtn.style.color = '#b91c1c';
+          aiMicBtn.innerHTML = '🔴 <span>Listening...</span>';
+        }
       } else {
         if (btn) btn.classList.remove('listening');
         if (icon) icon.textContent = '🎙️';
         if (label) label.textContent = 'Tap Microphone to Speak / बोलने के लिए माइक दबाएं';
         if (waveBars) waveBars.style.display = 'none';
+        if (aiMicBtn) {
+          aiMicBtn.style.background = '#ede9fe';
+          aiMicBtn.style.borderColor = '#c4b5fd';
+          aiMicBtn.style.color = '#7c3aed';
+          aiMicBtn.innerHTML = '🎙️ <span>Speak</span>';
+        }
       }
     },
 
     async processVoiceBill() {
       const textarea = document.getElementById('voice-transcript-textarea');
-      const prompt = textarea ? textarea.value.trim() : '';
+      let prompt = textarea ? textarea.value.trim() : '';
       if (!prompt) {
         Toast.show('Please speak or type the items sold', 'warning');
         return;
       }
+
+      // Normalize Hindi devanagari numerals (०-९ -> 0-9)
+      prompt = prompt.replace(/[०-९]/g, d => '०१२३४५६७८९'.indexOf(d));
 
       const inputCustName = document.getElementById('voice-cust-name-input');
       const customerName = (inputCustName ? inputCustName.value : '').trim();
@@ -4487,7 +4639,7 @@
       const statusLabel = document.getElementById('voice-status-label');
       if (statusLabel) statusLabel.textContent = '⏳ Processing speech into bill...';
 
-      // Use AI Engine
+      // 1. Cloud AI Engine
       if (AuthController.isAuthenticated()) {
         const activeBizId = AuthController.getActiveBusinessId();
         try {
@@ -4504,7 +4656,7 @@
         }
       }
 
-      // Local fallback using AiBillingController NLP
+      // 2. Local Fallback NLP Engine
       if (typeof AiBillingController !== 'undefined' && AiBillingController.nlpParse) {
         const catalog = Store.getProducts();
         const parsed = AiBillingController.nlpParse(prompt, catalog);
@@ -4531,7 +4683,7 @@
       }
 
       if (statusLabel) statusLabel.textContent = 'Tap Microphone to Speak / बोलने के लिए माइक दबाएं';
-      Toast.show('Could not parse items from speech. Try speaking clearly: "5 register 100 me, 2 pen 10 me"', 'warning');
+      Toast.show('Could not parse items from speech. Try: "5 register 100 me, 2 pen 10 me, cash"', 'warning');
     },
 
     renderDraft(draft) {

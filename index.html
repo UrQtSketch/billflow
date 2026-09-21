@@ -469,6 +469,10 @@
               <label for="ai-prompt-input" class="ai-input-label">STATIONERY & BOOKS SOLD (ENTER ITEMS & RATES)</label>
               <div class="ai-input-group">
                 <textarea id="ai-prompt-input" rows="2" placeholder='e.g. "2 register 70 me, 5 pen 10 me, 1 practical file 50 me"'></textarea>
+                <button type="button" class="btn btn-ai-mic" id="ai-btn-mic-prompt" title="Speak to type (बोलकर लिखें)" style="background:#ede9fe;color:#7c3aed;border:1.5px solid #c4b5fd;font-weight:700;display:inline-flex;align-items:center;gap:4px">
+                  <span id="ai-mic-icon">🎙️</span>
+                  <span>Speak</span>
+                </button>
                 <button type="button" class="btn primary ai-submit-btn" id="ai-btn-submit">
                   <span class="btn-text">⚡ Generate Bill</span>
                   <span class="btn-spinner" style="display:none">⏳ Processing...</span>
@@ -761,6 +765,13 @@
                   <button type="button" class="btn btn-sm primary" id="btn-voice-generate-manual" style="font-size:11px;padding:3px 10px">⚡ Generate Bill</button>
                 </div>
               </div>
+
+              <!-- Live Interim Speech Stream Indicator -->
+              <div id="voice-live-interim-box" style="display:none;margin-bottom:8px;padding:8px 12px;background:#fef3c7;border:1.5px dashed #f59e0b;border-radius:6px;font-size:13px;color:#92400e;text-align:left;animation:fadeIn 0.2s ease">
+                <span style="font-weight:700">🎙️ Live Hearing / आवाज़:</span>
+                <span id="voice-interim-text" style="font-style:italic;font-weight:600;margin-left:4px"></span>
+              </div>
+
               <textarea id="voice-transcript-textarea" rows="2" placeholder='Spoken text will appear here automatically (e.g. "5 register 100 me, 2 pen 10 me, cash")'></textarea>
             </div>
 
