@@ -129,6 +129,9 @@
       </div>
     </aside>
 
+    <!-- Mobile Sidebar Backdrop Overlay -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="window.toggleSidebar(false)"></div>
+
     <!-- Main Content Canvas -->
     <main class="main">
       <!-- Top Header Bar -->
@@ -1590,6 +1593,30 @@
       </div>
     </div>
   </div>
+
+  <!-- Mobile Bottom Quick Counter Navigation Bar -->
+  <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Mobile Bottom Navigation">
+    <button type="button" class="mobile-nav-item active" data-view="dashboard">
+      <span class="nav-icon">▦</span>
+      <span class="nav-label">Dashboard</span>
+    </button>
+    <button type="button" class="mobile-nav-item" data-view="create-invoice">
+      <span class="nav-icon">＋</span>
+      <span class="nav-label">New Bill</span>
+    </button>
+    <button type="button" class="mobile-nav-item mobile-nav-voice" data-view="voice-billing">
+      <span class="nav-icon" style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(124,58,237,0.4)">🎙️</span>
+      <span class="nav-label" style="color:#7c3aed;font-weight:700">Voice</span>
+    </button>
+    <button type="button" class="mobile-nav-item" data-view="ai-billing">
+      <span class="nav-icon">✦</span>
+      <span class="nav-label">AI Counter</span>
+    </button>
+    <button type="button" class="mobile-nav-item" data-view="sales-analysis">
+      <span class="nav-icon">📈</span>
+      <span class="nav-label">Profit</span>
+    </button>
+  </nav>
 
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>

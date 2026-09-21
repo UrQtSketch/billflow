@@ -614,23 +614,19 @@
   const Navigation = {
     currentView: 'dashboard',
     init() {
-      document.querySelectorAll('.nav button[data-view]').forEach(btn => {
+      // Bind both desktop sidebar buttons and mobile bottom navigation items
+      document.querySelectorAll('.nav button[data-view], .mobile-bottom-nav button[data-view]').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const view = btn.getAttribute('data-view');
-          // If entering create-invoice or navigating away while in edit mode, reset form
-          if (view === 'create-invoice') {
-            InvoiceController.resetForm();
-          } else if (InvoiceController.editingInvoiceId) {
+          if (view === 'create-invoice' || InvoiceController.editingInvoiceId) {
             InvoiceController.resetForm();
           }
           this.switchView(view);
-          if (window.innerWidth <= 720) {
-            document.getElementById('sidebar').classList.remove('open');
+          if (window.innerWidth <= 768) {
+            window.toggleSidebar(false);
           }
         });
       });
-
-
     },
     switchView(viewName) {
       // If leaving edit mode without saving, discard uncommitted edit session
@@ -643,9 +639,21 @@
       const activeViewEl = document.getElementById(`view-${viewName}`);
       if (activeViewEl) {
         activeViewEl.classList.add('active');
+        // Scroll to top on view change
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
 
-      document.querySelectorAll('.nav button').forEach(b => {
+      // Update sidebar nav active classes
+      document.querySelectorAll('.nav button[data-view]').forEach(b => {
+        if (b.getAttribute('data-view') === viewName) {
+          b.classList.add('active');
+        } else {
+          b.classList.remove('active');
+        }
+      });
+
+      // Update mobile bottom nav active classes
+      document.querySelectorAll('.mobile-bottom-nav button[data-view]').forEach(b => {
         if (b.getAttribute('data-view') === viewName) {
           b.classList.add('active');
         } else {
@@ -4181,19 +4189,30 @@
   };
 
   window.toggleSidebar = function (forceState) {
-    if (window.innerWidth <= 720) {
-      const sidebar = document.getElementById('sidebar');
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    const isMobile = window.innerWidth <= 768;
+
+    if (isMobile) {
       if (sidebar) {
+        let isOpen;
         if (typeof forceState === 'boolean') {
+          isOpen = forceState;
           if (forceState) sidebar.classList.add('open');
           else sidebar.classList.remove('open');
         } else {
-          sidebar.classList.toggle('open');
+          isOpen = sidebar.classList.toggle('open');
         }
+        if (backdrop) {
+          if (isOpen) backdrop.classList.add('show');
+          else backdrop.classList.remove('show');
+        }
+        document.body.style.overflow = isOpen ? 'hidden' : '';
       }
       return;
     }
 
+    // Desktop/Laptop collapse
     if (typeof forceState === 'boolean') {
       if (forceState) document.body.classList.add('sidebar-collapsed');
       else document.body.classList.remove('sidebar-collapsed');
@@ -4201,6 +4220,8 @@
       document.body.classList.toggle('sidebar-collapsed');
     }
 
+    if (backdrop) backdrop.classList.remove('show');
+    document.body.style.overflow = '';
     const isCollapsed = document.body.classList.contains('sidebar-collapsed');
     localStorage.setItem('billflow_sidebar_collapsed', isCollapsed ? 'true' : 'false');
   };
