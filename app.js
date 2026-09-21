@@ -662,6 +662,7 @@
       if (viewName === 'settings') SettingsController.loadSettings();
       if (viewName === 'create-invoice') InvoiceController.syncFormWithSettings();
       if (viewName === 'ai-billing') AiBillingController.init();
+      if (viewName === 'voice-billing') VoiceBillingController.init();
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -2003,6 +2004,13 @@
         btnPdf.addEventListener('click', () => {
           document.body.classList.remove('printing-modal');
           window.print();
+        });
+      }
+      const btnThermal = document.getElementById('preview-btn-thermal');
+      if (btnThermal) {
+        btnThermal.addEventListener('click', () => {
+          const data = this.collectFormData();
+          ThermalReceiptController.openModal(data);
         });
       }
       const btnWhatsapp = document.getElementById('preview-btn-whatsapp');
@@ -4217,8 +4225,731 @@
     if (arrow) arrow.textContent = show ? '▲' : '▼';
   };
 
+  // ============================================================
+  // VOICE BILLING CONTROLLER (HANDS-FREE COUNTER BILLING)
+  // ============================================================
+  const VoiceBillingController = {
+    recognition: null,
+    isListening: false,
+    currentLang: 'hi-IN',
+    activeDraft: null,
+
+    init() {
+      this.bindEvents();
+      this.initSpeechEngine();
+    },
+
+    initSpeechEngine() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        console.warn('Web Speech API is not supported in this browser.');
+        const statusLabel = document.getElementById('voice-status-label');
+        if (statusLabel) {
+          statusLabel.textContent = 'Speech recognition not supported in this browser. Type below or use Chrome/Edge.';
+        }
+        return;
+      }
+
+      this.recognition = new SpeechRecognition();
+      this.recognition.continuous = true;
+      this.recognition.interimResults = true;
+      this.recognition.lang = this.currentLang;
+
+      this.recognition.onstart = () => {
+        this.isListening = true;
+        this.updateListeningUI(true);
+      };
+
+      this.recognition.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript + ' ';
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        const textarea = document.getElementById('voice-transcript-textarea');
+        if (textarea) {
+          if (finalTranscript) {
+            textarea.value = (textarea.value + ' ' + finalTranscript).trim();
+          }
+        }
+      };
+
+      this.recognition.onerror = (event) => {
+        console.warn('Speech recognition error:', event.error);
+        if (event.error === 'not-allowed') {
+          Toast.show('Microphone permission was denied. Please allow mic access in browser.', 'error');
+        }
+        this.stopListening();
+      };
+
+      this.recognition.onend = () => {
+        this.isListening = false;
+        this.updateListeningUI(false);
+      };
+    },
+
+    bindEvents() {
+      // Main Mic button
+      const btnMic = document.getElementById('btn-voice-mic-main');
+      if (btnMic && !btnMic.dataset.bound) {
+        btnMic.dataset.bound = 'true';
+        btnMic.addEventListener('click', () => this.toggleListening());
+      }
+
+      // Language Switcher
+      const btnHi = document.getElementById('voice-lang-hi');
+      const btnEn = document.getElementById('voice-lang-en');
+      if (btnHi && !btnHi.dataset.bound) {
+        btnHi.dataset.bound = 'true';
+        btnHi.addEventListener('click', () => this.setLanguage('hi-IN'));
+      }
+      if (btnEn && !btnEn.dataset.bound) {
+        btnEn.dataset.bound = 'true';
+        btnEn.addEventListener('click', () => this.setLanguage('en-IN'));
+      }
+
+      // Clear & Manual Generate Buttons
+      const btnClear = document.getElementById('btn-voice-clear');
+      if (btnClear && !btnClear.dataset.bound) {
+        btnClear.dataset.bound = 'true';
+        btnClear.addEventListener('click', () => {
+          const textarea = document.getElementById('voice-transcript-textarea');
+          if (textarea) textarea.value = '';
+          this.discardDraft();
+        });
+      }
+
+      const btnGen = document.getElementById('btn-voice-generate-manual');
+      if (btnGen && !btnGen.dataset.bound) {
+        btnGen.dataset.bound = 'true';
+        btnGen.addEventListener('click', () => this.processVoiceBill());
+      }
+
+      // Quick Chips
+      document.querySelectorAll('.voice-chip').forEach(chip => {
+        if (!chip.dataset.bound) {
+          chip.dataset.bound = 'true';
+          chip.addEventListener('click', (e) => {
+            const prompt = e.currentTarget.getAttribute('data-speak') || '';
+            const textarea = document.getElementById('voice-transcript-textarea');
+            if (textarea) textarea.value = prompt;
+            this.processVoiceBill();
+          });
+        }
+      });
+
+      // Draft Actions
+      const btnDiscard = document.getElementById('voice-btn-discard-draft');
+      if (btnDiscard && !btnDiscard.dataset.bound) {
+        btnDiscard.dataset.bound = 'true';
+        btnDiscard.addEventListener('click', () => this.discardDraft());
+      }
+
+      const btnConfirm = document.getElementById('voice-btn-confirm-invoice');
+      if (btnConfirm && !btnConfirm.dataset.bound) {
+        btnConfirm.dataset.bound = 'true';
+        btnConfirm.addEventListener('click', () => this.confirmDraft());
+      }
+
+      const btnEditManual = document.getElementById('voice-btn-edit-manual');
+      if (btnEditManual && !btnEditManual.dataset.bound) {
+        btnEditManual.dataset.bound = 'true';
+        btnEditManual.addEventListener('click', () => this.editInManualForm());
+      }
+
+      const btnThermal = document.getElementById('voice-btn-thermal-print');
+      if (btnThermal && !btnThermal.dataset.bound) {
+        btnThermal.dataset.bound = 'true';
+        btnThermal.addEventListener('click', () => {
+          if (this.activeDraft) {
+            ThermalReceiptController.openModal(this.activeDraft);
+          }
+        });
+      }
+
+      const btnWhatsapp = document.getElementById('voice-btn-share-whatsapp');
+      if (btnWhatsapp && !btnWhatsapp.dataset.bound) {
+        btnWhatsapp.dataset.bound = 'true';
+        btnWhatsapp.addEventListener('click', () => this.shareWhatsApp());
+      }
+
+      // Payment & Discount in Voice Draft
+      const selPayment = document.getElementById('voice-draft-payment-method');
+      if (selPayment && !selPayment.dataset.bound) {
+        selPayment.dataset.bound = 'true';
+        selPayment.addEventListener('change', (e) => {
+          if (this.activeDraft) this.activeDraft.paymentMethod = e.target.value;
+        });
+      }
+
+      const inputDiscount = document.getElementById('voice-draft-discount');
+      if (inputDiscount && !inputDiscount.dataset.bound) {
+        inputDiscount.dataset.bound = 'true';
+        inputDiscount.addEventListener('input', (e) => {
+          const disc = Math.max(0, parseFloat(e.target.value) || 0);
+          if (this.activeDraft) {
+            this.activeDraft.discountAmount = disc;
+            this.activeDraft.discountValue = disc;
+            this.recalculateDraft();
+          }
+        });
+      }
+    },
+
+    setLanguage(lang) {
+      this.currentLang = lang;
+      if (this.recognition) this.recognition.lang = lang;
+      document.querySelectorAll('.voice-lang-btn').forEach(b => {
+        if (b.getAttribute('data-lang') === lang) b.classList.add('active');
+        else b.classList.remove('active');
+      });
+      Toast.show(lang === 'hi-IN' ? 'Language set to Hindi (हिंदी)' : 'Language set to English / Hinglish', 'default');
+    },
+
+    toggleListening() {
+      if (this.isListening) {
+        this.stopListening();
+      } else {
+        this.startListening();
+      }
+    },
+
+    startListening() {
+      if (!this.recognition) {
+        this.initSpeechEngine();
+        if (!this.recognition) {
+          Toast.show('Web Speech API is not supported in this browser. Please use Chrome or Edge.', 'error');
+          return;
+        }
+      }
+      try {
+        this.recognition.start();
+      } catch (e) {
+        console.warn('Speech start error', e);
+      }
+    },
+
+    stopListening() {
+      if (this.recognition && this.isListening) {
+        try {
+          this.recognition.stop();
+        } catch (e) {}
+      }
+      this.isListening = false;
+      this.updateListeningUI(false);
+
+      // Auto-process if text is available
+      const textarea = document.getElementById('voice-transcript-textarea');
+      if (textarea && textarea.value.trim().length > 3) {
+        this.processVoiceBill();
+      }
+    },
+
+    updateListeningUI(listening) {
+      const btn = document.getElementById('btn-voice-mic-main');
+      const label = document.getElementById('voice-status-label');
+      const waveBars = document.getElementById('voice-wave-bars');
+      const icon = document.getElementById('voice-mic-icon');
+
+      if (listening) {
+        if (btn) btn.classList.add('listening');
+        if (icon) icon.textContent = '🔴';
+        if (label) label.textContent = 'Listening... बोलिए (बोलना जारी रखें...)';
+        if (waveBars) waveBars.style.display = 'flex';
+      } else {
+        if (btn) btn.classList.remove('listening');
+        if (icon) icon.textContent = '🎙️';
+        if (label) label.textContent = 'Tap Microphone to Speak / बोलने के लिए माइक दबाएं';
+        if (waveBars) waveBars.style.display = 'none';
+      }
+    },
+
+    async processVoiceBill() {
+      const textarea = document.getElementById('voice-transcript-textarea');
+      const prompt = textarea ? textarea.value.trim() : '';
+      if (!prompt) {
+        Toast.show('Please speak or type the items sold', 'warning');
+        return;
+      }
+
+      const inputCustName = document.getElementById('voice-cust-name-input');
+      const customerName = (inputCustName ? inputCustName.value : '').trim();
+
+      const inputCustPhone = document.getElementById('voice-cust-phone-input');
+      const customerPhone = (inputCustPhone ? inputCustPhone.value : '').trim();
+
+      const statusLabel = document.getElementById('voice-status-label');
+      if (statusLabel) statusLabel.textContent = '⏳ Processing speech into bill...';
+
+      // Use AI Engine
+      if (AuthController.isAuthenticated()) {
+        const activeBizId = AuthController.getActiveBusinessId();
+        try {
+          const res = await ApiClient.callAiAssistant(activeBizId, prompt, customerName, customerPhone);
+          if (res.data && res.data.draft) {
+            this.activeDraft = res.data.draft;
+            this.renderDraft(this.activeDraft);
+            if (statusLabel) statusLabel.textContent = '✓ Bill Draft Ready! Review below.';
+            Toast.show('Bill generated from speech!', 'success');
+            return;
+          }
+        } catch (err) {
+          console.warn('Cloud AI failed, fallback to local NLP', err);
+        }
+      }
+
+      // Local fallback using AiBillingController NLP
+      if (typeof AiBillingController !== 'undefined' && AiBillingController.nlpParse) {
+        const catalog = Store.getProducts();
+        const parsed = AiBillingController.nlpParse(prompt, catalog);
+        if (parsed.items && parsed.items.length > 0) {
+          const subtotal = parsed.items.reduce((s, it) => s + (it.total || 0), 0);
+          this.activeDraft = {
+            customerName: customerName || parsed.customerName || 'Walk-in Customer',
+            customerPhone: customerPhone || parsed.customerPhone || '',
+            items: parsed.items,
+            subtotal,
+            discountAmount: parsed.discount || 0,
+            discountValue: parsed.discount || 0,
+            taxRate: 0,
+            taxAmount: 0,
+            grandTotal: Math.max(0, subtotal - (parsed.discount || 0)),
+            paymentMethod: parsed.paymentMethod || 'Cash',
+            paymentStatus: 'Paid'
+          };
+          this.renderDraft(this.activeDraft);
+          if (statusLabel) statusLabel.textContent = '✓ Bill Draft Ready! Review below.';
+          Toast.show('Bill generated from speech!', 'success');
+          return;
+        }
+      }
+
+      if (statusLabel) statusLabel.textContent = 'Tap Microphone to Speak / बोलने के लिए माइक दबाएं';
+      Toast.show('Could not parse items from speech. Try speaking clearly: "5 register 100 me, 2 pen 10 me"', 'warning');
+    },
+
+    renderDraft(draft) {
+      const card = document.getElementById('voice-draft-card');
+      const tbody = document.getElementById('voice-draft-table-body');
+      if (!card || !tbody) return;
+
+      tbody.innerHTML = '';
+      (draft.items || []).forEach((it, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${Utils.escapeHtml(it.name)}</strong></td>
+          <td style="text-align:center">
+            <input type="number" min="1" class="qty-input" value="${it.qty}" onchange="window.VoiceBillingController.updateItemQty(${idx}, this.value)" style="width:65px;padding:4px;text-align:center;border:1px solid var(--line);border-radius:4px">
+          </td>
+          <td style="text-align:right">
+            <input type="number" min="0" step="any" class="price-input" value="${it.price}" onchange="window.VoiceBillingController.updateItemPrice(${idx}, this.value)" style="width:85px;padding:4px;text-align:right;border:1px solid var(--line);border-radius:4px">
+          </td>
+          <td style="text-align:right" id="voice-row-total-${idx}"><strong>${Utils.formatCurrency(it.total, '₹')}</strong></td>
+          <td style="text-align:center">
+            <button type="button" class="btn-icon danger" onclick="window.VoiceBillingController.removeItem(${idx})" title="Remove Item">✕</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const selPayment = document.getElementById('voice-draft-payment-method');
+      if (selPayment) selPayment.value = draft.paymentMethod || 'Cash';
+
+      const inputDiscount = document.getElementById('voice-draft-discount');
+      if (inputDiscount) inputDiscount.value = draft.discountAmount || 0;
+
+      const metaText = document.getElementById('voice-draft-meta-text');
+      if (metaText) metaText.textContent = `Customer: ${draft.customerName || 'Walk-in'} • ${draft.items.length} item(s)`;
+
+      this.recalculateDraft();
+      card.style.display = 'block';
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    },
+
+    updateItemQty(idx, val) {
+      if (!this.activeDraft || !this.activeDraft.items[idx]) return;
+      const qty = Math.max(1, parseInt(val) || 1);
+      const item = this.activeDraft.items[idx];
+      item.qty = qty;
+      item.total = qty * (item.price || 0);
+      const totalEl = document.getElementById(`voice-row-total-${idx}`);
+      if (totalEl) totalEl.innerHTML = `<strong>${Utils.formatCurrency(item.total, '₹')}</strong>`;
+      this.recalculateDraft();
+    },
+
+    updateItemPrice(idx, val) {
+      if (!this.activeDraft || !this.activeDraft.items[idx]) return;
+      const price = Math.max(0, parseFloat(val) || 0);
+      const item = this.activeDraft.items[idx];
+      item.price = price;
+      item.total = (item.qty || 1) * price;
+      const totalEl = document.getElementById(`voice-row-total-${idx}`);
+      if (totalEl) totalEl.innerHTML = `<strong>${Utils.formatCurrency(item.total, '₹')}</strong>`;
+      this.recalculateDraft();
+    },
+
+    removeItem(idx) {
+      if (!this.activeDraft || !this.activeDraft.items) return;
+      this.activeDraft.items.splice(idx, 1);
+      if (this.activeDraft.items.length === 0) {
+        this.discardDraft();
+      } else {
+        this.renderDraft(this.activeDraft);
+      }
+    },
+
+    recalculateDraft() {
+      if (!this.activeDraft) return;
+      const subtotal = (this.activeDraft.items || []).reduce((s, it) => s + (it.total || 0), 0);
+      const discount = Math.min(subtotal, Math.max(0, this.activeDraft.discountAmount || 0));
+      const grandTotal = Math.max(0, subtotal - discount);
+
+      this.activeDraft.subtotal = subtotal;
+      this.activeDraft.discountAmount = discount;
+      this.activeDraft.grandTotal = grandTotal;
+
+      const elSub = document.getElementById('voice-draft-subtotal');
+      const elDisc = document.getElementById('voice-draft-discount-val');
+      const elTotal = document.getElementById('voice-draft-grand-total');
+
+      if (elSub) elSub.textContent = Utils.formatCurrency(subtotal, '₹');
+      if (elDisc) elDisc.textContent = `-${Utils.formatCurrency(discount, '₹')}`;
+      if (elTotal) elTotal.textContent = Utils.formatCurrency(grandTotal, '₹');
+    },
+
+    discardDraft() {
+      this.activeDraft = null;
+      const card = document.getElementById('voice-draft-card');
+      if (card) card.style.display = 'none';
+      const statusLabel = document.getElementById('voice-status-label');
+      if (statusLabel) statusLabel.textContent = 'Tap Microphone to Speak / बोलने के लिए माइक दबाएं';
+    },
+
+    async confirmDraft() {
+      if (!this.activeDraft || !this.activeDraft.items || this.activeDraft.items.length === 0) {
+        Toast.show('No items in draft to confirm', 'error');
+        return;
+      }
+
+      const settings = Store.getSettings();
+      const invoiceData = {
+        invoiceNumber: `${settings.invoicePrefix}${settings.nextNumber}`,
+        date: Utils.todayYMD(),
+        dueDate: Utils.todayYMD(),
+        customerName: this.activeDraft.customerName || 'Walk-in Customer',
+        customerPhone: this.activeDraft.customerPhone || '',
+        customerAddress: '',
+        items: this.activeDraft.items.map(it => ({
+          productId: it.productId || null,
+          name: it.name,
+          sku: it.sku || '',
+          qty: it.qty,
+          price: it.price,
+          costPrice: it.costPrice || (it.price * 0.7),
+          total: it.total
+        })),
+        subtotal: this.activeDraft.subtotal,
+        discountType: 'fixed',
+        discountValue: this.activeDraft.discountAmount || 0,
+        discountAmount: this.activeDraft.discountAmount || 0,
+        taxRate: 0,
+        taxAmount: 0,
+        grandTotal: this.activeDraft.grandTotal,
+        paymentMethod: this.activeDraft.paymentMethod || 'Cash',
+        paymentStatus: 'Paid',
+        paidAmount: this.activeDraft.grandTotal,
+        balanceDue: 0,
+        notes: 'Generated via Voice Billing Counter'
+      };
+
+      if (AuthController.isAuthenticated()) {
+        const activeBizId = AuthController.getActiveBusinessId();
+        try {
+          const res = await ApiClient.createInvoice(activeBizId, invoiceData);
+          if (res.invoice) {
+            settings.nextNumber += 1;
+            Store.saveSettings(settings);
+            await AuthController.syncFromCloud(activeBizId);
+            Toast.show(`Invoice #${res.invoice.invoiceNumber} created successfully!`, 'success');
+            this.discardDraft();
+            const textarea = document.getElementById('voice-transcript-textarea');
+            if (textarea) textarea.value = '';
+            DashboardController.render();
+            InvoicesListController.render();
+            if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
+            return;
+          }
+        } catch (err) {
+          console.warn('Cloud invoice save error', err);
+        }
+      }
+
+      // Local save
+      const invoices = Store.getInvoices();
+      const newInv = {
+        id: Utils.generateId('inv_'),
+        ...invoiceData,
+        createdAt: new Date().toISOString()
+      };
+      invoices.unshift(newInv);
+      Store.saveInvoices(invoices);
+
+      settings.nextNumber += 1;
+      Store.saveSettings(settings);
+
+      Toast.show(`Invoice #${newInv.invoiceNumber} created successfully!`, 'success');
+      this.discardDraft();
+      const textarea = document.getElementById('voice-transcript-textarea');
+      if (textarea) textarea.value = '';
+      DashboardController.render();
+      InvoicesListController.render();
+      if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
+    },
+
+    editInManualForm() {
+      if (!this.activeDraft) return;
+      InvoiceController.resetForm();
+
+      const custName = document.getElementById('inv-customer-name');
+      const custPhone = document.getElementById('inv-customer-phone');
+      if (custName) custName.value = this.activeDraft.customerName || '';
+      if (custPhone) custPhone.value = this.activeDraft.customerPhone || '';
+
+      const discVal = document.getElementById('inv-discount-value');
+      if (discVal) discVal.value = this.activeDraft.discountAmount || 0;
+
+      const payMethod = document.getElementById('inv-payment-method');
+      if (payMethod) payMethod.value = this.activeDraft.paymentMethod || 'Cash';
+
+      const tbody = document.getElementById('line-items-tbody');
+      if (tbody) {
+        tbody.innerHTML = '';
+        (this.activeDraft.items || []).forEach(it => {
+          InvoiceController.addItemRow({
+            productId: it.productId || 'custom',
+            name: it.name,
+            sku: it.sku || '',
+            qty: it.qty,
+            price: it.price
+          });
+        });
+      }
+
+      InvoiceController.recalculate();
+      Navigation.switchView('create-invoice');
+      Toast.show('Loaded voice draft into detailed invoice editor', 'default');
+    },
+
+    shareWhatsApp() {
+      if (!this.activeDraft) return;
+      const settings = Store.getSettings();
+      let text = `*${settings.businessName} - Bill Summary*\n\n`;
+      text += `Customer: ${this.activeDraft.customerName || 'Customer'}\n`;
+      text += `--------------------------\n`;
+      (this.activeDraft.items || []).forEach((it, idx) => {
+        text += `${idx + 1}. ${it.name} x ${it.qty} = ₹${it.total}\n`;
+      });
+      text += `--------------------------\n`;
+      text += `*Total Amount: ₹${this.activeDraft.grandTotal}*\n`;
+      text += `Payment: ${this.activeDraft.paymentMethod || 'Cash'} (Paid)\n\n`;
+      text += `Thank you for your visit!`;
+
+      const phone = (this.activeDraft.customerPhone || '').replace(/\D/g, '');
+      const waUrl = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(waUrl, '_blank');
+    }
+  };
+
+  // ============================================================
+  // THERMAL POS RECEIPT PRINTER CONTROLLER (80mm / 58mm)
+  // ============================================================
+  const ThermalReceiptController = {
+    activeInvoiceData: null,
+    currentRollWidth: '80',
+
+    init() {
+      const btn80 = document.getElementById('thermal-size-80');
+      const btn58 = document.getElementById('thermal-size-58');
+      if (btn80 && !btn80.dataset.bound) {
+        btn80.dataset.bound = 'true';
+        btn80.addEventListener('click', () => this.setRollWidth('80'));
+      }
+      if (btn58 && !btn58.dataset.bound) {
+        btn58.dataset.bound = 'true';
+        btn58.addEventListener('click', () => this.setRollWidth('58'));
+      }
+
+      const btnPrint = document.getElementById('btn-print-thermal-action');
+      if (btnPrint && !btnPrint.dataset.bound) {
+        btnPrint.dataset.bound = 'true';
+        btnPrint.addEventListener('click', () => this.printSlip());
+      }
+    },
+
+    setRollWidth(width) {
+      this.currentRollWidth = width;
+      const paper = document.getElementById('thermal-paper-content');
+      if (paper) {
+        paper.className = `thermal-paper size-${width}mm`;
+      }
+      document.querySelectorAll('.thermal-size-btn').forEach(b => {
+        if (b.getAttribute('data-width') === width) b.classList.add('active');
+        else b.classList.remove('active');
+      });
+    },
+
+    openModal(invoiceOrDraft) {
+      if (!invoiceOrDraft) return;
+      this.activeInvoiceData = invoiceOrDraft;
+      this.renderThermalPaper(invoiceOrDraft);
+      Modal.open('modal-thermal-receipt');
+    },
+
+    openModalFromActiveInvoice() {
+      const invoices = Store.getInvoices();
+      if (InvoiceController.editingInvoiceId) {
+        const inv = invoices.find(i => i.id === InvoiceController.editingInvoiceId);
+        if (inv) return this.openModal(inv);
+      }
+      const data = InvoiceController.collectFormData();
+      if (data && data.items && data.items.length > 0) {
+        return this.openModal(data);
+      }
+      if (invoices.length > 0) {
+        return this.openModal(invoices[0]);
+      }
+      Toast.show('No invoice data available to print POS slip', 'error');
+    },
+
+    renderThermalPaper(data) {
+      const container = document.getElementById('thermal-paper-content');
+      if (!container) return;
+
+      const settings = Store.getSettings();
+      const items = data.items || [];
+      const totalAmount = data.grandTotal || data.totalAmount || 0;
+      const subtotal = data.subtotal || totalAmount;
+      const discount = data.discountAmount || 0;
+      const tax = data.taxAmount || 0;
+      const custName = data.customerName || 'Walk-in Customer';
+      const custPhone = data.customerPhone || '';
+      const invNum = data.invoiceNumber || 'REC-POS';
+      const dateStr = data.date || Utils.todayYMD();
+      const pmtMethod = data.paymentMethod || 'Cash';
+
+      const itemsRowsHtml = items.map(it => `
+        <tr>
+          <td>
+            <strong>${Utils.escapeHtml(it.name)}</strong>
+          </td>
+          <td style="text-align:center">${it.qty}</td>
+          <td style="text-align:right">₹${it.price}</td>
+          <td style="text-align:right"><strong>₹${it.total}</strong></td>
+        </tr>
+      `).join('');
+
+      container.innerHTML = `
+        <div class="thermal-header">
+          <div class="thermal-biz-title">${Utils.escapeHtml(settings.businessName || 'BILLFLOW STORE')}</div>
+          ${settings.address ? `<div style="font-size:11px;margin-top:2px">${Utils.escapeHtml(settings.address)}</div>` : ''}
+          ${settings.phone ? `<div style="font-size:11px">Ph: ${Utils.escapeHtml(settings.phone)}</div>` : ''}
+          ${settings.gstin ? `<div style="font-size:11px">GSTIN: ${Utils.escapeHtml(settings.gstin)}</div>` : ''}
+        </div>
+
+        <div class="thermal-divider"></div>
+
+        <div class="thermal-row" style="font-weight:700">
+          <span>TAX INVOICE / POS RECEIPT</span>
+          <span>#${Utils.escapeHtml(invNum)}</span>
+        </div>
+        <div class="thermal-row" style="font-size:11px">
+          <span>Date: ${Utils.formatDate(dateStr)}</span>
+          <span>Time: ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+        </div>
+        <div class="thermal-row" style="font-size:11px">
+          <span>Customer: <b>${Utils.escapeHtml(custName)}</b></span>
+          ${custPhone ? `<span>${Utils.escapeHtml(custPhone)}</span>` : ''}
+        </div>
+
+        <div class="thermal-divider"></div>
+
+        <table class="thermal-table">
+          <thead>
+            <tr>
+              <th style="text-align:left">Item</th>
+              <th style="text-align:center">Qty</th>
+              <th style="text-align:right">Rate</th>
+              <th style="text-align:right">Amt</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsRowsHtml}
+          </tbody>
+        </table>
+
+        <div class="thermal-divider"></div>
+
+        <div class="thermal-row">
+          <span>Subtotal:</span>
+          <span>₹${Number(subtotal).toFixed(2)}</span>
+        </div>
+        ${discount > 0 ? `
+          <div class="thermal-row">
+            <span>Discount:</span>
+            <span>-₹${Number(discount).toFixed(2)}</span>
+          </div>
+        ` : ''}
+        ${tax > 0 ? `
+          <div class="thermal-row">
+            <span>GST / Tax:</span>
+            <span>₹${Number(tax).toFixed(2)}</span>
+          </div>
+        ` : ''}
+
+        <div class="thermal-double-divider"></div>
+
+        <div class="thermal-row thermal-total-row">
+          <span>TOTAL AMOUNT:</span>
+          <span>₹${Number(totalAmount).toFixed(2)}</span>
+        </div>
+
+        <div class="thermal-double-divider"></div>
+
+        <div class="thermal-row" style="font-size:11px">
+          <span>Payment Mode:</span>
+          <span><b>${Utils.escapeHtml(pmtMethod)}</b></span>
+        </div>
+        <div class="thermal-row" style="font-size:11px">
+          <span>Status:</span>
+          <span><b>PAID ✓</b></span>
+        </div>
+
+        <div class="thermal-footer">
+          <div style="font-weight:700">*** THANK YOU! VISIT AGAIN ***</div>
+          <div style="font-size:10px;margin-top:3px;color:#666">BillFlow Point of Sale</div>
+        </div>
+      `;
+    },
+
+    printSlip() {
+      document.body.classList.add('printing-thermal');
+      window.print();
+      setTimeout(() => {
+        document.body.classList.remove('printing-thermal');
+      }, 500);
+    }
+  };
+
   window.AuthController = AuthController;
   window.AiBillingController = AiBillingController;
+  window.VoiceBillingController = VoiceBillingController;
+  window.ThermalReceiptController = ThermalReceiptController;
   window.SalesAnalysisController = SalesAnalysisController;
   window.ThemeManager = ThemeManager;
 
@@ -4240,6 +4971,8 @@
     InvoiceController.init();
     InvoicesListController.init();
     AiBillingController.init();
+    VoiceBillingController.init();
+    ThermalReceiptController.init();
     SalesAnalysisController.init();
     DashboardController.render();
     SalesAnalysisController.render();
