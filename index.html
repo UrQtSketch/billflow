@@ -797,11 +797,30 @@
             </div>
           </section>
 
+          <!-- Voice Ambiguity Resolution Card (Which product did you mean?) -->
+          <section class="card panel voice-ambiguity-card" id="voice-ambiguity-card" style="display:none;margin-top:14px;border:1.5px solid #8b5cf6">
+            <div class="panel-head" style="margin-bottom:10px">
+              <div>
+                <strong style="color:#7c3aed;font-size:14px">⚡ Which book / item do you mean? (कौन सा सामान देना है?)</strong>
+                <p class="muted" style="margin:2px 0 0;font-size:12.5px">Multiple catalog products match what you spoke. Tap one to add directly to the bill:</p>
+              </div>
+            </div>
+            <div class="voice-ambiguity-list" id="voice-ambiguity-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          </section>
+
+          <!-- Voice Conflict & Action Banner Container (Price conflicts, Unregistered customer, Missing payment, Stock warnings) -->
+          <div id="voice-conflict-container" style="display:none;margin-top:14px;display:flex;flex-direction:column;gap:10px">
+            <!-- Dynamically populated conflict & alert cards -->
+          </div>
+
           <!-- Voice Draft Result Card -->
           <section class="card panel voice-draft-card" id="voice-draft-card" style="display:none">
             <div class="panel-head">
               <div>
-                <h2>Generated Bill Draft / तैयार बिल</h2>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <h2>Generated Bill Draft / तैयार बिल</h2>
+                  <span class="status pending" id="voice-draft-badge" style="font-size:11px;font-weight:700">DRAFT — REVIEW REQUIRED</span>
+                </div>
                 <span class="muted" id="voice-draft-meta-text">Review items, edit if needed, and print or confirm.</span>
               </div>
               <div style="display:flex;gap:8px">

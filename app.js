@@ -4226,7 +4226,322 @@
   };
 
   // ============================================================
-  // VOICE BILLING CONTROLLER (HANDS-FREE COUNTER BILLING)
+  // VOICE BILLING MATCHER (OFFLINE SMART NLP & FUZZY MATCHING)
+  // ============================================================
+  const VoiceBillingMatcher = {
+    DEV_DIGITS: {
+      '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
+      '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
+    },
+
+    HINDI_NUMBERS: {
+      'ek': 1, 'ik': 1, 'one': 1, 'एक': 1,
+      'do': 2, 'two': 2, 'दो': 2, '२': 2,
+      'teen': 3, 'tin': 3, 'three': 3, 'तीन': 3, '३': 3,
+      'chaar': 4, 'char': 4, 'four': 4, 'चार': 4, '४': 4,
+      'paanch': 5, 'panch': 5, 'five': 5, 'पांच': 5, 'पाँच': 5, '५': 5,
+      'chhah': 6, 'chhe': 6, 'six': 6, 'छह': 6, 'छ:': 6, '६': 6,
+      'saat': 7, 'seven': 7, 'सात': 7, '७': 7,
+      'aath': 8, 'eight': 8, 'आठ': 8, '८': 8,
+      'nau': 9, 'nine': 9, 'नौ': 9, '९': 9,
+      'das': 10, 'ten': 10, 'दस': 10,
+      'gyarah': 11, 'eleven': 11, 'ग्यारह': 11,
+      'barah': 12, 'twelve': 12, 'बारह': 12, 'darjan': 12, 'dozen': 12, 'दर्जन': 12,
+      'terah': 13, 'thirteen': 13, 'तेरह': 13,
+      'chaudah': 14, 'fourteen': 14, 'चौदह': 14,
+      'pandrah': 15, 'fifteen': 15, 'पंद्रह': 15,
+      'solah': 16, 'sixteen': 16, 'सोलह': 16,
+      'satrah': 17, 'seventeen': 17, 'सत्रह': 17,
+      'atharah': 18, 'eighteen': 18, 'अट्ठारह': 18,
+      'unnis': 19, 'nineteen': 19, 'उन्नीस': 19,
+      'bees': 20, 'twenty': 20, 'बीस': 20,
+      'pachees': 25, 'पच्चीस': 25,
+      'tees': 30, 'thirty': 30, 'तीस': 30,
+      'paintees': 35, 'पैंतीस': 35,
+      'chalis': 40, 'forty': 40, 'चालीस': 40,
+      'pachaas': 50, 'fifty': 50, 'पचास': 50,
+      'saath': 60, 'sixty': 60, 'साठ': 60,
+      'sattar': 70, 'seventy': 70, 'सत्तर': 70,
+      'assi': 80, 'eighty': 80, 'अस्सी': 80,
+      'nabbe': 90, 'ninety': 90, 'नब्बे': 90,
+      'sau': 100, 'hundred': 100, 'सौ': 100
+    },
+
+    SYNONYMS: {
+      'register': ['रजिस्टर', 'notebook', 'copy', 'कॉपी', 'khata'],
+      'copy': ['कॉपी', 'notebook', 'register', 'रजिस्टर', 'rough'],
+      'pen': ['पेन', 'ball pen', 'gel pen', 'reynolds', 'cello', 'pilot', 'flair', 'कलम'],
+      'pencil': ['पेंसिल', 'apsara', 'natraj', 'lead'],
+      'file': ['फाइल', 'practical file', 'folder', 'plastic file', 'cobra file'],
+      'maths': ['math', 'गणित', 'ncert maths', 'mathematics'],
+      'physics': ['भौतिकी', 'भौतिक विज्ञान', 'ncert physics', 'pradeep'],
+      'chemistry': ['रसायन', 'रसायन विज्ञान', 'ncert chemistry'],
+      'biology': ['जीव विज्ञान', 'ncert biology'],
+      'eraser': ['रबड़', 'rubber', 'eraser'],
+      'scale': ['रूलर', 'ruler', 'scale', 'inch tape'],
+      'color': ['रंग', 'crayon', 'sketch', 'paint', 'oil pastel'],
+      'calculator': ['कैलकुलेटर', 'casio', 'citizen'],
+      'book': ['किताब', 'pustak', 'पुस्तक', 'textbook', 'guide']
+    },
+
+    normalizeText(raw) {
+      if (!raw) return '';
+      let text = String(raw).trim();
+      // Replace devanagari numerals
+      text = text.replace(/[०-९]/g, d => this.DEV_DIGITS[d] || d);
+      return text;
+    },
+
+    fuzzyScore(term, productName) {
+      const t = term.toLowerCase().trim();
+      const p = productName.toLowerCase().trim();
+
+      if (t === p) return 1.0;
+      if (p.includes(t)) return 0.85 + (t.length / p.length) * 0.1;
+      if (t.includes(p)) return 0.80;
+
+      const tWords = t.split(/\s+/).filter(w => w.length > 1);
+      const pWords = p.split(/\s+/).filter(w => w.length > 1);
+      if (tWords.length === 0 || pWords.length === 0) return 0;
+
+      let matchedWords = 0;
+      for (const tw of tWords) {
+        if (pWords.some(pw => pw.includes(tw) || tw.includes(pw))) {
+          matchedWords++;
+        } else {
+          // Check synonym match
+          for (const [key, list] of Object.entries(this.SYNONYMS)) {
+            if ((tw === key || list.includes(tw)) && (p.includes(key) || list.some(syn => p.includes(syn)))) {
+              matchedWords += 0.85;
+              break;
+            }
+          }
+        }
+      }
+
+      return (matchedWords / tWords.length) * 0.9;
+    },
+
+    parseSpokenBill(rawPrompt, catalog, customers, explicitCustName = '', explicitCustPhone = '') {
+      const prompt = this.normalizeText(rawPrompt);
+      const lower = prompt.toLowerCase();
+
+      // 1. Payment Method Detection
+      let paymentMethod = 'Cash';
+      let isPaymentSpoken = false;
+
+      if (/(?:upi|gpay|google pay|phonepe|paytm|online|qr code|qr|यूपीआई)/i.test(prompt)) {
+        paymentMethod = 'UPI';
+        isPaymentSpoken = true;
+      } else if (/(?:card|debit card|credit card|pos card|कार्ड)/i.test(prompt)) {
+        paymentMethod = 'Card';
+        isPaymentSpoken = true;
+      } else if (/(?:udhaar|udhari|baaki|baki|khata|pending|उधार|खाता)/i.test(prompt)) {
+        paymentMethod = 'Pending';
+        isPaymentSpoken = true;
+      } else if (/(?:bank transfer|neft|rtgs|imps|बैंक)/i.test(prompt)) {
+        paymentMethod = 'Bank Transfer';
+        isPaymentSpoken = true;
+      } else if (/(?:cash|nagad|नकद|रोकड़ा|rokad)/i.test(prompt)) {
+        paymentMethod = 'Cash';
+        isPaymentSpoken = true;
+      }
+
+      // 2. Customer Detection
+      let customerName = (explicitCustName || '').trim();
+      let customerPhone = (explicitCustPhone || '').trim();
+      let isSpokenCustomerFound = false;
+      let spokenCustomerName = '';
+
+      if (!customerName) {
+        const custMatch = prompt.match(/^([a-zA-Z\u0900-\u097F\s\.]+?)\s*(?:ko|se|ne|को|ने|khatte me|khate me|का|के नाम)\b/i) ||
+                          prompt.match(/(?:ko|se|ne|को|ने)\s+([a-zA-Z\u0900-\u097F\s\.]+)$/i);
+        if (custMatch) {
+          spokenCustomerName = custMatch[1].trim();
+          customerName = spokenCustomerName;
+        }
+      }
+
+      let matchedCustomer = null;
+      if (customerName) {
+        const cLower = customerName.toLowerCase();
+        matchedCustomer = customers.find(c =>
+          c.name.toLowerCase() === cLower ||
+          c.name.toLowerCase().includes(cLower) ||
+          cLower.includes(c.name.toLowerCase()) ||
+          (customerPhone && c.phone && c.phone.includes(customerPhone))
+        ) || null;
+      }
+
+      if (matchedCustomer) {
+        customerName = matchedCustomer.name;
+        if (!customerPhone) customerPhone = matchedCustomer.phone || '';
+        isSpokenCustomerFound = true;
+      } else if (!customerName) {
+        customerName = 'Walk-in Customer';
+      }
+
+      const isUnregistered = spokenCustomerName && !matchedCustomer;
+
+      // 3. Discount Detection
+      let discountAmount = 0;
+      const discMatch = prompt.match(/(\d+(?:\.\d+)?)\s*(?:%|percent|प्रतिशत)?\s*(?:discount|off|kam|chhoot|छूट|कम)/i) ||
+                        prompt.match(/(?:discount|off|kam|chhoot|छूट|कम)\s*(\d+(?:\.\d+)?)/i);
+      if (discMatch) {
+        discountAmount = parseFloat(discMatch[1]) || 0;
+      }
+
+      // 4. Clean sentence for item segmentation
+      let cleanText = prompt
+        .replace(/^.+?\b(?:ko|se|ne|को|ने|khatte me|khate me|का|के नाम)\b[:\s]*/i, '')
+        .replace(/\b(?:ko|se|ne|को|ने)\s+[a-zA-Z\u0900-\u097F\s\.]+$/i, '')
+        .replace(/(?:,\s*)?(?:cash|nagad|नकद|रोकड़ा|rokad|upi|gpay|paytm|phonepe|card|udhaar|udhari|baaki|pending|online)\.?$/i, '')
+        .replace(/\b(?:\d+(?:\.\d+)?\s*(?:discount|off|kam|chhoot|छूट|कम)|discount\s*\d+)\b/gi, '')
+        .replace(/(?:diye|diya|hai|दिए|दिया|दी|de do|becha)\.?$/i, '')
+        .trim();
+
+      const segments = cleanText.split(/\s*(?:,\s*|\baur\b|\band\b|\bऔर\b|\bfir\b|\bphir\b|\bsaath me\b|\+|\n)\s*/i);
+      const items = [];
+      const ambiguityList = [];
+
+      for (let i = 0; i < segments.length; i++) {
+        let seg = segments[i].trim();
+        if (!seg || seg.length < 2) continue;
+
+        // A. Extract Quantity
+        let qty = 1;
+        const qMatch = seg.match(/^(\d+(?:\.\d+)?|[a-zA-Z\u0900-\u097F]+)\s*(?:x|pcs|piece|pieces|pkt|packet|nug|पीस|पैकेट|नग)?\s+(.+)$/i);
+        if (qMatch) {
+          const rawQ = qMatch[1].toLowerCase().trim();
+          if (this.HINDI_NUMBERS[rawQ]) {
+            qty = this.HINDI_NUMBERS[rawQ];
+            seg = qMatch[2].trim();
+          } else if (!isNaN(parseFloat(rawQ)) && isFinite(rawQ)) {
+            qty = parseFloat(rawQ) || 1;
+            seg = qMatch[2].trim();
+          }
+        }
+
+        // B. Extract Spoken Rate / Price
+        let spokenPrice = null;
+        const pMatch = seg.match(/(?:@|rate|price|rs\.?|₹|रुपये|रुपए|रु|rupaye|rupiya|rupay|inr|\bin\b|\bme\b|\bmein\b|में)\s*(\d+(?:\.\d+)?)(?:\s*(?:per|each|\/pc|\/piece|\/unit|\/item|प्रति|प्रत्येक|ka|ki|ke|me|mein|रुपये|रुपए|रु))?/i) ||
+                       seg.match(/(\d+(?:\.\d+)?)\s*(?:rs|rupees|rupaye|rupiya|rupay|inr|रुपये|रुपए|रु|ka|ki|ke|me|mein|में|per|each|\/pc|\/piece|\/unit|\/item|प्रति|प्रत्येक)(?:\s*(?:per|each|\/pc|\/piece|\/unit|\/item|प्रति|प्रत्येक))?/i) ||
+                       seg.match(/(?:\s+)(\d+(?:\.\d+)?)$/i);
+        if (pMatch) {
+          spokenPrice = parseFloat(pMatch[1]) || 0;
+          seg = seg.substring(0, pMatch.index).trim();
+        }
+
+        // C. Clean Search Term
+        const cleanTerm = seg
+          .replace(/\b(rs|rupees|rupaye|rupiya|rupay|inr|me|mein|ka|ki|ke|rate|price|per|each|pc|pcs|piece|pieces|unit|units|item|items|प्रति|प्रत्येक|वाला|वाली|वाले|wala|wali|wale)\b/gi, ' ')
+          .replace(/^[^\w\u0900-\u097F]+|[^\w\u0900-\u097F]+$/g, '')
+          .trim();
+
+        if (!cleanTerm) continue;
+
+        // D. Fuzzy Matching Against Catalog
+        const scoredProds = catalog.map(p => ({
+          product: p,
+          score: this.fuzzyScore(cleanTerm, p.name)
+        })).filter(entry => entry.score >= 0.45)
+          .sort((a, b) => b.score - a.score);
+
+        let selectedProduct = null;
+        let isAmbiguous = false;
+        let candidateOptions = [];
+
+        if (scoredProds.length === 1 && scoredProds[0].score >= 0.55) {
+          selectedProduct = scoredProds[0].product;
+        } else if (scoredProds.length > 1) {
+          if (scoredProds[0].score >= 0.75 && (scoredProds[0].score - scoredProds[1].score) >= 0.18) {
+            selectedProduct = scoredProds[0].product;
+          } else {
+            isAmbiguous = true;
+            candidateOptions = scoredProds.slice(0, 4).map(e => e.product);
+            selectedProduct = scoredProds[0].product; // default to top candidate
+          }
+        }
+
+        // E. Price Conflict & Applied Price
+        let appliedPrice = 0;
+        let hasPriceConflict = false;
+        let catalogPrice = 0;
+
+        if (selectedProduct) {
+          catalogPrice = Number(selectedProduct.price) || 0;
+          if (spokenPrice !== null && Math.abs(spokenPrice - catalogPrice) > 0.01) {
+            hasPriceConflict = true;
+            appliedPrice = spokenPrice; // user spoke a specific price
+          } else {
+            appliedPrice = spokenPrice !== null ? spokenPrice : catalogPrice;
+          }
+        } else {
+          appliedPrice = spokenPrice !== null ? spokenPrice : 0;
+        }
+
+        // F. Stock Validation
+        let hasInsufficientStock = false;
+        let availableStock = 0;
+        if (selectedProduct && selectedProduct.type === 'product') {
+          availableStock = parseInt(selectedProduct.stock, 10) || 0;
+          if (qty > availableStock) {
+            hasInsufficientStock = true;
+          }
+        }
+
+        const itemObj = {
+          productId: selectedProduct ? selectedProduct.id : null,
+          name: selectedProduct ? selectedProduct.name : (cleanTerm.charAt(0).toUpperCase() + cleanTerm.slice(1)),
+          sku: selectedProduct ? (selectedProduct.sku || '') : 'CUSTOM',
+          qty: qty,
+          price: appliedPrice,
+          total: Math.round(qty * appliedPrice * 100) / 100,
+          catalogPrice: catalogPrice,
+          spokenPrice: spokenPrice,
+          hasPriceConflict: hasPriceConflict,
+          isAmbiguous: isAmbiguous,
+          candidateOptions: candidateOptions,
+          ambiguousTerm: cleanTerm,
+          isUncataloged: !selectedProduct,
+          hasInsufficientStock: hasInsufficientStock,
+          availableStock: availableStock,
+          costPrice: selectedProduct ? (Number(selectedProduct.costPrice) || (appliedPrice * 0.7)) : (appliedPrice * 0.7)
+        };
+
+        items.push(itemObj);
+
+        if (isAmbiguous) {
+          ambiguityList.push({
+            itemIndex: items.length - 1,
+            term: cleanTerm,
+            options: candidateOptions
+          });
+        }
+      }
+
+      const subtotal = items.reduce((s, it) => s + (it.total || 0), 0);
+      const grandTotal = Math.max(0, subtotal - discountAmount);
+
+      return {
+        customer: matchedCustomer,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        isUnregistered: isUnregistered,
+        spokenCustomerName: spokenCustomerName,
+        items: items,
+        ambiguityList: ambiguityList,
+        subtotal: subtotal,
+        discountAmount: discountAmount,
+        grandTotal: grandTotal,
+        paymentMethod: paymentMethod,
+        isPaymentSpoken: isPaymentSpoken
+      };
+    }
+  };
+
+  // ============================================================
+  // VOICE BILLING CONTROLLER (COUNTER ASSISTANT)
   // ============================================================
   const VoiceBillingController = {
     recognition: null,
@@ -4320,13 +4635,11 @@
         };
 
         this.recognition.onend = () => {
-          // If still within the 20-second active listening window, automatically restart to prevent cutoffs!
+          // If still within active 20s window, keep listening
           if (this.isListening && this.secondsRemaining > 0) {
             setTimeout(() => {
               if (this.isListening && this.secondsRemaining > 0) {
-                try {
-                  this.recognition.start();
-                } catch (e) {}
+                try { this.recognition.start(); } catch (e) {}
               }
             }, 100);
             return;
@@ -4595,7 +4908,7 @@
       }
 
       if (timerText) {
-        timerText.textContent = `⏱️ ${this.secondsRemaining}s remaining... (आराम से बोलते रहें)`;
+        timerText.textContent = `⏱️ ${this.secondsRemaining}s remaining... (बोलते रहें)`;
       }
       if (progBar) {
         progBar.style.width = '100%';
@@ -4605,7 +4918,7 @@
         this.secondsRemaining--;
 
         if (timerText) {
-          timerText.textContent = `⏱️ ${this.secondsRemaining}s remaining... (आराम से बोलते रहें)`;
+          timerText.textContent = `⏱️ ${this.secondsRemaining}s remaining... (बोलते रहें)`;
         }
         if (progBar) {
           const pct = Math.max(0, (this.secondsRemaining / this.TOTAL_SECONDS) * 100);
@@ -4702,80 +5015,251 @@
         return;
       }
 
-      // Normalize Hindi devanagari numerals (०-९ -> 0-9)
-      prompt = prompt.replace(/[०-९]/g, d => '०१२३४५६७८९'.indexOf(d));
-
       const inputCustName = document.getElementById('voice-cust-name-input');
-      const customerName = (inputCustName ? inputCustName.value : '').trim();
+      const explicitName = (inputCustName ? inputCustName.value : '').trim();
 
       const inputCustPhone = document.getElementById('voice-cust-phone-input');
-      const customerPhone = (inputCustPhone ? inputCustPhone.value : '').trim();
+      const explicitPhone = (inputCustPhone ? inputCustPhone.value : '').trim();
 
       const statusLabel = document.getElementById('voice-status-label');
       if (statusLabel) statusLabel.textContent = '⏳ Processing speech into bill...';
 
-      // 1. Cloud AI Engine
-      if (AuthController.isAuthenticated()) {
-        const activeBizId = AuthController.getActiveBusinessId();
-        try {
-          const res = await ApiClient.callAiAssistant(activeBizId, prompt, customerName, customerPhone);
-          if (res.data && res.data.draft) {
-            this.activeDraft = res.data.draft;
-            this.renderDraft(this.activeDraft);
-            if (statusLabel) statusLabel.textContent = '✓ Bill Draft Ready! Review below.';
-            Toast.show('Bill generated from speech!', 'success');
-            return;
-          }
-        } catch (err) {
-          console.warn('Cloud AI failed, fallback to local NLP', err);
-        }
-      }
+      // 1. Process locally using VoiceBillingMatcher (High accuracy, offline resilient)
+      const catalog = Store.getProducts();
+      const customers = Store.getCustomers();
+      const parsed = VoiceBillingMatcher.parseSpokenBill(prompt, catalog, customers, explicitName, explicitPhone);
 
-      // 2. Local Fallback NLP Engine
-      if (typeof AiBillingController !== 'undefined' && AiBillingController.nlpParse) {
-        const catalog = Store.getProducts();
-        const parsed = AiBillingController.nlpParse(prompt, catalog);
-        if (parsed.items && parsed.items.length > 0) {
-          const subtotal = parsed.items.reduce((s, it) => s + (it.total || 0), 0);
-          this.activeDraft = {
-            customerName: customerName || parsed.customerName || 'Walk-in Customer',
-            customerPhone: customerPhone || parsed.customerPhone || '',
-            items: parsed.items,
-            subtotal,
-            discountAmount: parsed.discount || 0,
-            discountValue: parsed.discount || 0,
-            taxRate: 0,
-            taxAmount: 0,
-            grandTotal: Math.max(0, subtotal - (parsed.discount || 0)),
-            paymentMethod: parsed.paymentMethod || 'Cash',
-            paymentStatus: 'Paid'
-          };
-          this.renderDraft(this.activeDraft);
-          if (statusLabel) statusLabel.textContent = '✓ Bill Draft Ready! Review below.';
-          Toast.show('Bill generated from speech!', 'success');
-          return;
-        }
+      if (parsed.items && parsed.items.length > 0) {
+        this.activeDraft = {
+          customerId: parsed.customer ? parsed.customer.id : null,
+          customerName: parsed.customerName || 'Walk-in Customer',
+          customerPhone: parsed.customerPhone || '',
+          isExistingCustomer: !parsed.isUnregistered && parsed.customerName !== 'Walk-in Customer',
+          isUnregistered: parsed.isUnregistered,
+          spokenCustomerName: parsed.spokenCustomerName,
+          items: parsed.items,
+          ambiguityList: parsed.ambiguityList || [],
+          subtotal: parsed.subtotal,
+          discountAmount: parsed.discountAmount || 0,
+          discountValue: parsed.discountAmount || 0,
+          taxRate: 0,
+          taxAmount: 0,
+          grandTotal: parsed.grandTotal,
+          paymentMethod: parsed.paymentMethod || 'Cash',
+          isPaymentSpoken: parsed.isPaymentSpoken,
+          paymentStatus: 'Paid',
+          rawPrompt: prompt
+        };
+
+        this.renderDraft(this.activeDraft);
+        if (statusLabel) statusLabel.textContent = '✓ Bill Draft Ready! Review items below.';
+        Toast.show('Bill generated from speech!', 'success');
+        return;
       }
 
       if (statusLabel) statusLabel.textContent = 'Tap Microphone to Speak / बोलने के लिए माइक दबाएं';
-      Toast.show('Could not parse items from speech. Try: "5 register 100 me, 2 pen 10 me, cash"', 'warning');
+      Toast.show('Could not identify items from speech. Try: "5 register 100 me, 2 pen 10 me, cash"', 'warning');
     },
 
     renderDraft(draft) {
       const card = document.getElementById('voice-draft-card');
       const tbody = document.getElementById('voice-draft-table-body');
+      const ambCard = document.getElementById('voice-ambiguity-card');
+      const ambList = document.getElementById('voice-ambiguity-list');
+      const conflictContainer = document.getElementById('voice-conflict-container');
       if (!card || !tbody) return;
 
+      // 1. Render Ambiguity Resolvers (if any items match multiple catalog products)
+      if (ambCard && ambList) {
+        if (draft.ambiguityList && draft.ambiguityList.length > 0) {
+          ambList.innerHTML = '';
+          draft.ambiguityList.forEach(amb => {
+            const item = draft.items[amb.itemIndex];
+            const groupDiv = document.createElement('div');
+            groupDiv.style.marginBottom = '8px';
+            groupDiv.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Choices for "${Utils.escapeHtml(amb.term)}":</div>`;
+
+            amb.options.forEach(opt => {
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'voice-ambiguity-btn';
+              btn.innerHTML = `
+                <div>
+                  <span class="voice-ambiguity-title">${Utils.escapeHtml(opt.name)}</span>
+                  <span style="font-size:11px;color:var(--muted);margin-left:6px">SKU: ${Utils.escapeHtml(opt.sku || '—')}</span>
+                </div>
+                <div class="voice-ambiguity-meta">
+                  <span style="font-weight:800;color:#059669">₹${Number(opt.price).toFixed(2)}</span>
+                  <span class="status" style="font-size:10px;padding:2px 6px">${opt.stock} in stock</span>
+                </div>
+              `;
+              btn.addEventListener('click', () => {
+                this.resolveAmbiguity(amb.itemIndex, opt);
+              });
+              groupDiv.appendChild(btn);
+            });
+
+            // Keep custom option
+            const btnCustom = document.createElement('button');
+            btnCustom.type = 'button';
+            btnCustom.className = 'voice-ambiguity-btn';
+            btnCustom.style.background = '#f8fafc';
+            btnCustom.style.borderStyle = 'dashed';
+            btnCustom.innerHTML = `
+              <div>
+                <span class="voice-ambiguity-title">✎ Keep as Uncataloged "${Utils.escapeHtml(amb.term)}"</span>
+              </div>
+              <span class="muted" style="font-size:11px">Set price manually</span>
+            `;
+            btnCustom.addEventListener('click', () => {
+              this.keepAmbiguousAsCustom(amb.itemIndex, amb.term);
+            });
+            groupDiv.appendChild(btnCustom);
+
+            ambList.appendChild(groupDiv);
+          });
+          ambCard.style.display = 'block';
+        } else {
+          ambCard.style.display = 'none';
+        }
+      }
+
+      // 2. Render Conflict & Smart Assistance Banners
+      if (conflictContainer) {
+        conflictContainer.innerHTML = '';
+        let hasAlerts = false;
+
+        // A. Price Conflict Banners
+        draft.items.forEach((it, idx) => {
+          if (it.hasPriceConflict) {
+            hasAlerts = true;
+            const b = document.createElement('div');
+            b.className = 'voice-conflict-banner price-conflict';
+            b.innerHTML = `
+              <div class="voice-conflict-header">
+                <span>⚡</span>
+                <span style="color:#92400e"><strong>Price Conflict on "${Utils.escapeHtml(it.name)}":</strong> Spoken ₹${it.spokenPrice} vs Catalog ₹${it.catalogPrice}</span>
+              </div>
+              <div class="voice-conflict-actions">
+                <button type="button" class="voice-conflict-btn btn-catalog" onclick="window.VoiceBillingController.resolvePriceConflict(${idx}, ${it.catalogPrice})">✓ Use Catalog Price (₹${it.catalogPrice})</button>
+                <button type="button" class="voice-conflict-btn btn-spoken" onclick="window.VoiceBillingController.resolvePriceConflict(${idx}, ${it.spokenPrice})">✓ Use Spoken Price (₹${it.spokenPrice})</button>
+              </div>
+            `;
+            conflictContainer.appendChild(b);
+          }
+        });
+
+        // B. Unregistered Customer Banner
+        if (draft.isUnregistered && draft.spokenCustomerName) {
+          hasAlerts = true;
+          const b = document.createElement('div');
+          b.className = 'voice-conflict-banner customer-alert';
+          b.innerHTML = `
+            <div class="voice-conflict-header">
+              <span>👤</span>
+              <span style="color:#1e40af"><strong>Customer "${Utils.escapeHtml(draft.spokenCustomerName)}" is not registered in your directory.</strong></span>
+            </div>
+            <div class="voice-conflict-actions">
+              <button type="button" class="voice-conflict-btn btn-action" onclick="window.VoiceBillingController.registerCustomerPrompt('${Utils.escapeHtml(draft.spokenCustomerName)}')">＋ Add "${Utils.escapeHtml(draft.spokenCustomerName)}" to Customers</button>
+              <button type="button" class="voice-conflict-btn btn-secondary-opt" onclick="window.VoiceBillingController.keepWalkInCustomer()">Continue as Walk-in Customer</button>
+            </div>
+          `;
+          conflictContainer.appendChild(b);
+        }
+
+        // C. Missing Payment Method Selector
+        if (!draft.isPaymentSpoken) {
+          hasAlerts = true;
+          const b = document.createElement('div');
+          b.className = 'voice-conflict-banner payment-alert';
+          b.innerHTML = `
+            <div class="voice-conflict-header">
+              <span>💳</span>
+              <span style="color:#9d174d"><strong>Payment method was not spoken:</strong> Quick select payment mode:</span>
+            </div>
+            <div class="voice-conflict-actions">
+              <button type="button" class="voice-conflict-btn ${draft.paymentMethod === 'Cash' ? 'btn-action' : 'btn-secondary-opt'}" onclick="window.VoiceBillingController.setPaymentMethod('Cash')">💵 Cash (नकद)</button>
+              <button type="button" class="voice-conflict-btn ${draft.paymentMethod === 'UPI' ? 'btn-action' : 'btn-secondary-opt'}" onclick="window.VoiceBillingController.setPaymentMethod('UPI')">📱 UPI / QR</button>
+              <button type="button" class="voice-conflict-btn ${draft.paymentMethod === 'Card' ? 'btn-action' : 'btn-secondary-opt'}" onclick="window.VoiceBillingController.setPaymentMethod('Card')">💳 Card</button>
+              <button type="button" class="voice-conflict-btn ${draft.paymentMethod === 'Pending' ? 'btn-action' : 'btn-secondary-opt'}" onclick="window.VoiceBillingController.setPaymentMethod('Pending')">📒 Udhaar / Pending</button>
+            </div>
+          `;
+          conflictContainer.appendChild(b);
+        }
+
+        // D. Insufficient Stock Warning
+        draft.items.forEach((it, idx) => {
+          if (it.hasInsufficientStock) {
+            hasAlerts = true;
+            const b = document.createElement('div');
+            b.className = 'voice-conflict-banner stock-alert';
+            b.innerHTML = `
+              <div class="voice-conflict-header">
+                <span>⚠️</span>
+                <span style="color:#991b1b"><strong>Insufficient Stock for "${Utils.escapeHtml(it.name)}":</strong> Requested ${it.qty} pcs, but only ${it.availableStock} pcs available.</span>
+              </div>
+              <div class="voice-conflict-actions">
+                <button type="button" class="voice-conflict-btn btn-catalog" onclick="window.VoiceBillingController.adjustItemQty(${idx}, ${it.availableStock})">Adjust to Available (${it.availableStock} pcs)</button>
+                <button type="button" class="voice-conflict-btn btn-secondary-opt" onclick="window.VoiceBillingController.dismissStockWarning(${idx})">Keep Requested (${it.qty} pcs)</button>
+              </div>
+            `;
+            conflictContainer.appendChild(b);
+          }
+        });
+
+        // E. Uncataloged Item Notice
+        draft.items.forEach((it, idx) => {
+          if (it.isUncataloged && it.name !== 'Item') {
+            hasAlerts = true;
+            const b = document.createElement('div');
+            b.className = 'voice-conflict-banner';
+            b.style.background = '#fefce8';
+            b.style.border = '1.5px solid #eab308';
+            b.innerHTML = `
+              <div class="voice-conflict-header">
+                <span>📦</span>
+                <span style="color:#854d0e"><strong>Item "${Utils.escapeHtml(it.name)}" is uncataloged:</strong> Price set to ₹${it.price}.</span>
+              </div>
+              <div class="voice-conflict-actions">
+                <button type="button" class="voice-conflict-btn btn-action" onclick="window.VoiceBillingController.addUncatalogedToCatalog(${idx})">＋ Add "${Utils.escapeHtml(it.name)}" to Catalog (₹${it.price})</button>
+                <button type="button" class="voice-conflict-btn btn-secondary-opt" onclick="window.VoiceBillingController.dismissUncatalogedNotice(${idx})">Keep as One-Time Item</button>
+              </div>
+            `;
+            conflictContainer.appendChild(b);
+          }
+        });
+
+        conflictContainer.style.display = hasAlerts ? 'flex' : 'none';
+      }
+
+      // 3. Render Table Rows
       tbody.innerHTML = '';
       (draft.items || []).forEach((it, idx) => {
         const tr = document.createElement('tr');
+
+        let badges = '';
+        if (it.productId) {
+          badges += `<span class="tag" style="background:#ecfdf5;color:#047857;font-size:10px;margin-left:6px">Catalog</span>`;
+        } else {
+          badges += `<span class="tag" style="background:#fef3c7;color:#92400e;font-size:10px;margin-left:6px">Uncataloged</span>`;
+        }
+        if (it.hasPriceConflict) {
+          badges += `<span class="tag" style="background:#fffbeb;color:#b45309;font-size:10px;margin-left:4px">⚡ Price Spoken ₹${it.price}</span>`;
+        }
+        if (it.hasInsufficientStock) {
+          badges += `<span class="tag" style="background:#fef2f2;color:#b91c1c;font-size:10px;margin-left:4px">⚠️ Low Stock (${it.availableStock})</span>`;
+        }
+
         tr.innerHTML = `
-          <td><strong>${Utils.escapeHtml(it.name)}</strong></td>
+          <td>
+            <strong>${Utils.escapeHtml(it.name)}</strong>
+            ${badges}
+          </td>
           <td style="text-align:center">
-            <input type="number" min="1" class="qty-input" value="${it.qty}" onchange="window.VoiceBillingController.updateItemQty(${idx}, this.value)" style="width:65px;padding:4px;text-align:center;border:1px solid var(--line);border-radius:4px">
+            <input type="number" min="1" class="qty-input" value="${it.qty}" oninput="window.VoiceBillingController.updateItemQty(${idx}, this.value)" style="width:65px;padding:4px;text-align:center;border:1px solid var(--line);border-radius:4px;font-weight:700">
           </td>
           <td style="text-align:right">
-            <input type="number" min="0" step="any" class="price-input" value="${it.price}" onchange="window.VoiceBillingController.updateItemPrice(${idx}, this.value)" style="width:85px;padding:4px;text-align:right;border:1px solid var(--line);border-radius:4px">
+            <input type="number" min="0" step="any" class="price-input" value="${it.price}" oninput="window.VoiceBillingController.updateItemPrice(${idx}, this.value)" style="width:85px;padding:4px;text-align:right;border:1px solid var(--line);border-radius:4px;font-weight:700">
           </td>
           <td style="text-align:right" id="voice-row-total-${idx}"><strong>${Utils.formatCurrency(it.total, '₹')}</strong></td>
           <td style="text-align:center">
@@ -4792,19 +5276,169 @@
       if (inputDiscount) inputDiscount.value = draft.discountAmount || 0;
 
       const metaText = document.getElementById('voice-draft-meta-text');
-      if (metaText) metaText.textContent = `Customer: ${draft.customerName || 'Walk-in'} • ${draft.items.length} item(s)`;
+      if (metaText) {
+        const custType = draft.isExistingCustomer ? 'Existing Customer' : (draft.isUnregistered ? 'Unregistered Customer' : 'Walk-in');
+        metaText.textContent = `Customer: ${draft.customerName || 'Walk-in'} (${custType}) • ${draft.items.length} item(s) • Payment: ${draft.paymentMethod || 'Cash'}`;
+      }
 
       this.recalculateDraft();
       card.style.display = 'block';
       card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     },
 
+    resolveAmbiguity(itemIndex, chosenProduct) {
+      if (!this.activeDraft || !this.activeDraft.items[itemIndex]) return;
+      const item = this.activeDraft.items[itemIndex];
+      item.productId = chosenProduct.id;
+      item.name = chosenProduct.name;
+      item.sku = chosenProduct.sku || '';
+      item.catalogPrice = Number(chosenProduct.price) || 0;
+      item.isAmbiguous = false;
+      item.isUncataloged = false;
+
+      // check price conflict
+      if (item.spokenPrice !== null && Math.abs(item.spokenPrice - item.catalogPrice) > 0.01) {
+        item.hasPriceConflict = true;
+        item.price = item.spokenPrice;
+      } else {
+        item.hasPriceConflict = false;
+        item.price = item.catalogPrice;
+      }
+      item.total = Math.round(item.qty * item.price * 100) / 100;
+
+      // remove from ambiguity list
+      if (this.activeDraft.ambiguityList) {
+        this.activeDraft.ambiguityList = this.activeDraft.ambiguityList.filter(a => a.itemIndex !== itemIndex);
+      }
+
+      Toast.show(`Applied "${chosenProduct.name}" to draft!`, 'success');
+      this.renderDraft(this.activeDraft);
+    },
+
+    keepAmbiguousAsCustom(itemIndex, term) {
+      if (!this.activeDraft || !this.activeDraft.items[itemIndex]) return;
+      const item = this.activeDraft.items[itemIndex];
+      item.isAmbiguous = false;
+      item.isUncataloged = true;
+      if (this.activeDraft.ambiguityList) {
+        this.activeDraft.ambiguityList = this.activeDraft.ambiguityList.filter(a => a.itemIndex !== itemIndex);
+      }
+      this.renderDraft(this.activeDraft);
+    },
+
+    resolvePriceConflict(itemIndex, chosenPrice) {
+      if (!this.activeDraft || !this.activeDraft.items[itemIndex]) return;
+      const item = this.activeDraft.items[itemIndex];
+      item.price = Number(chosenPrice) || 0;
+      item.hasPriceConflict = false;
+      item.total = Math.round(item.qty * item.price * 100) / 100;
+      Toast.show(`Price set to ₹${item.price} for "${item.name}"`, 'success');
+      this.renderDraft(this.activeDraft);
+    },
+
+    setPaymentMethod(method) {
+      if (!this.activeDraft) return;
+      this.activeDraft.paymentMethod = method;
+      this.activeDraft.isPaymentSpoken = true;
+      Toast.show(`Payment mode set to ${method}`, 'default');
+      this.renderDraft(this.activeDraft);
+    },
+
+    registerCustomerPrompt(name) {
+      if (!this.activeDraft) return;
+      const phone = this.activeDraft.customerPhone || '';
+      const customers = Store.getCustomers();
+      const newCust = {
+        id: Utils.generateId('cust_'),
+        name: name,
+        phone: phone,
+        email: '',
+        address: '',
+        notes: 'Added from Voice Billing counter',
+        createdAt: new Date().toISOString()
+      };
+
+      customers.unshift(newCust);
+      Store.saveCustomers(customers);
+
+      if (AuthController.isAuthenticated()) {
+        const activeBizId = AuthController.getActiveBusinessId();
+        ApiClient.createCustomer(activeBizId, newCust).catch(e => console.warn('Cloud customer save error', e));
+      }
+
+      this.activeDraft.customerId = newCust.id;
+      this.activeDraft.customerName = newCust.name;
+      this.activeDraft.isUnregistered = false;
+      this.activeDraft.isExistingCustomer = true;
+
+      Toast.show(`Customer "${newCust.name}" registered successfully!`, 'success');
+      this.renderDraft(this.activeDraft);
+    },
+
+    keepWalkInCustomer() {
+      if (!this.activeDraft) return;
+      this.activeDraft.isUnregistered = false;
+      this.renderDraft(this.activeDraft);
+    },
+
+    adjustItemQty(itemIndex, newQty) {
+      this.updateItemQty(itemIndex, newQty);
+      if (this.activeDraft && this.activeDraft.items[itemIndex]) {
+        this.activeDraft.items[itemIndex].hasInsufficientStock = false;
+        this.renderDraft(this.activeDraft);
+      }
+    },
+
+    dismissStockWarning(itemIndex) {
+      if (!this.activeDraft || !this.activeDraft.items[itemIndex]) return;
+      this.activeDraft.items[itemIndex].hasInsufficientStock = false;
+      this.renderDraft(this.activeDraft);
+    },
+
+    addUncatalogedToCatalog(itemIndex) {
+      if (!this.activeDraft || !this.activeDraft.items[itemIndex]) return;
+      const item = this.activeDraft.items[itemIndex];
+      const products = Store.getProducts();
+      const newProd = {
+        id: Utils.generateId('prod_'),
+        name: item.name,
+        sku: `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
+        price: Number(item.price) || 0,
+        costPrice: Number(item.price) * 0.7,
+        stock: 50,
+        type: 'product',
+        category: 'General',
+        createdAt: new Date().toISOString()
+      };
+
+      products.unshift(newProd);
+      Store.saveProducts(products);
+
+      if (AuthController.isAuthenticated()) {
+        const activeBizId = AuthController.getActiveBusinessId();
+        ApiClient.createProduct(activeBizId, newProd).catch(e => console.warn('Cloud product save error', e));
+      }
+
+      item.productId = newProd.id;
+      item.sku = newProd.sku;
+      item.isUncataloged = false;
+
+      Toast.show(`Added "${newProd.name}" to Catalog at ₹${newProd.price}!`, 'success');
+      this.renderDraft(this.activeDraft);
+    },
+
+    dismissUncatalogedNotice(itemIndex) {
+      if (!this.activeDraft || !this.activeDraft.items[itemIndex]) return;
+      this.activeDraft.items[itemIndex].isUncataloged = false;
+      this.renderDraft(this.activeDraft);
+    },
+
     updateItemQty(idx, val) {
       if (!this.activeDraft || !this.activeDraft.items[idx]) return;
-      const qty = Math.max(1, parseInt(val) || 1);
+      const qty = Math.max(1, parseInt(val, 10) || 1);
       const item = this.activeDraft.items[idx];
       item.qty = qty;
-      item.total = qty * (item.price || 0);
+      item.total = Math.round(qty * (item.price || 0) * 100) / 100;
       const totalEl = document.getElementById(`voice-row-total-${idx}`);
       if (totalEl) totalEl.innerHTML = `<strong>${Utils.formatCurrency(item.total, '₹')}</strong>`;
       this.recalculateDraft();
@@ -4815,7 +5449,7 @@
       const price = Math.max(0, parseFloat(val) || 0);
       const item = this.activeDraft.items[idx];
       item.price = price;
-      item.total = (item.qty || 1) * price;
+      item.total = Math.round((item.qty || 1) * price * 100) / 100;
       const totalEl = document.getElementById(`voice-row-total-${idx}`);
       if (totalEl) totalEl.innerHTML = `<strong>${Utils.formatCurrency(item.total, '₹')}</strong>`;
       this.recalculateDraft();
@@ -4853,9 +5487,13 @@
     discardDraft() {
       this.activeDraft = null;
       const card = document.getElementById('voice-draft-card');
+      const ambCard = document.getElementById('voice-ambiguity-card');
+      const conflictContainer = document.getElementById('voice-conflict-container');
       if (card) card.style.display = 'none';
+      if (ambCard) ambCard.style.display = 'none';
+      if (conflictContainer) conflictContainer.style.display = 'none';
       const statusLabel = document.getElementById('voice-status-label');
-      if (statusLabel) statusLabel.textContent = 'Tap Microphone to Speak / बोलने के लिए माइक दबाएं';
+      if (statusLabel) statusLabel.textContent = 'Tap Microphone to Speak / 20 सेकंड तक आराम से बोलें';
     },
 
     async confirmDraft() {
@@ -4866,6 +5504,7 @@
 
       const settings = Store.getSettings();
       const invoiceData = {
+        customerId: this.activeDraft.customerId || null,
         invoiceNumber: `${settings.invoicePrefix}${settings.nextNumber}`,
         date: Utils.todayYMD(),
         dueDate: Utils.todayYMD(),
@@ -4889,10 +5528,10 @@
         taxAmount: 0,
         grandTotal: this.activeDraft.grandTotal,
         paymentMethod: this.activeDraft.paymentMethod || 'Cash',
-        paymentStatus: 'Paid',
-        paidAmount: this.activeDraft.grandTotal,
-        balanceDue: 0,
-        notes: 'Generated via Voice Billing Counter'
+        paymentStatus: this.activeDraft.paymentMethod === 'Pending' ? 'Pending' : 'Paid',
+        paidAmount: this.activeDraft.paymentMethod === 'Pending' ? 0 : this.activeDraft.grandTotal,
+        balanceDue: this.activeDraft.paymentMethod === 'Pending' ? this.activeDraft.grandTotal : 0,
+        notes: `Generated via Voice Counter Assistant ("${this.activeDraft.rawPrompt || ''}")`
       };
 
       if (AuthController.isAuthenticated()) {
@@ -4900,10 +5539,21 @@
         try {
           const res = await ApiClient.createInvoice(activeBizId, invoiceData);
           if (res.invoice) {
-            settings.nextNumber += 1;
+            settings.nextNumber = (Number(settings.nextNumber) || 1001) + 1;
             Store.saveSettings(settings);
+
+            // Deduct stock in store
+            const products = Store.getProducts();
+            (this.activeDraft.items || []).forEach(it => {
+              if (it.productId) {
+                const p = products.find(prod => prod.id === it.productId);
+                if (p && p.type === 'product') p.stock = Math.max(0, (p.stock || 0) - it.qty);
+              }
+            });
+            Store.saveProducts(products);
+
             await AuthController.syncFromCloud(activeBizId);
-            Toast.show(`Invoice #${res.invoice.invoiceNumber} created successfully!`, 'success');
+            Toast.show(`Invoice #${res.invoice.invoiceNumber || res.invoice.invoice_number} created successfully!`, 'success');
             this.discardDraft();
             const textarea = document.getElementById('voice-transcript-textarea');
             if (textarea) textarea.value = '';
@@ -4917,7 +5567,7 @@
         }
       }
 
-      // Local save
+      // Local store save
       const invoices = Store.getInvoices();
       const newInv = {
         id: Utils.generateId('inv_'),
@@ -4927,7 +5577,17 @@
       invoices.unshift(newInv);
       Store.saveInvoices(invoices);
 
-      settings.nextNumber += 1;
+      // Deduct stock in local catalog
+      const products = Store.getProducts();
+      (this.activeDraft.items || []).forEach(it => {
+        if (it.productId) {
+          const p = products.find(prod => prod.id === it.productId);
+          if (p && p.type === 'product') p.stock = Math.max(0, (p.stock || 0) - it.qty);
+        }
+      });
+      Store.saveProducts(products);
+
+      settings.nextNumber = (Number(settings.nextNumber) || 1001) + 1;
       Store.saveSettings(settings);
 
       Toast.show(`Invoice #${newInv.invoiceNumber} created successfully!`, 'success');
@@ -4937,6 +5597,7 @@
       DashboardController.render();
       InvoicesListController.render();
       if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
+      InvoicePreviewModal.open(newInv);
     },
 
     editInManualForm() {
@@ -4976,7 +5637,7 @@
     shareWhatsApp() {
       if (!this.activeDraft) return;
       const settings = Store.getSettings();
-      let text = `*${settings.businessName} - Bill Summary*\n\n`;
+      let text = `*${settings.businessName} - Counter Bill*\n\n`;
       text += `Customer: ${this.activeDraft.customerName || 'Customer'}\n`;
       text += `--------------------------\n`;
       (this.activeDraft.items || []).forEach((it, idx) => {
@@ -4984,7 +5645,7 @@
       });
       text += `--------------------------\n`;
       text += `*Total Amount: ₹${this.activeDraft.grandTotal}*\n`;
-      text += `Payment: ${this.activeDraft.paymentMethod || 'Cash'} (Paid)\n\n`;
+      text += `Payment Mode: ${this.activeDraft.paymentMethod || 'Cash'}\n\n`;
       text += `Thank you for your visit!`;
 
       const phone = (this.activeDraft.customerPhone || '').replace(/\D/g, '');

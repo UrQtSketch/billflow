@@ -2372,6 +2372,132 @@ body.sidebar-collapsed .main {
   gap: 10px;
 }
 
+/* Ambiguity & Conflict Resolvers */
+.voice-ambiguity-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.voice-ambiguity-btn:hover {
+  background: #ede9fe;
+  border-color: #8b5cf6;
+  transform: translateY(-1px);
+}
+
+.voice-ambiguity-title {
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.voice-ambiguity-meta {
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-conflict-banner {
+  padding: 12px 14px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.voice-conflict-banner.price-conflict {
+  background: #fffbeb;
+  border: 1.5px solid #f59e0b;
+}
+
+.voice-conflict-banner.customer-alert {
+  background: #eff6ff;
+  border: 1.5px solid #3b82f6;
+}
+
+.voice-conflict-banner.payment-alert {
+  background: #fdf2f8;
+  border: 1.5px solid #ec4899;
+}
+
+.voice-conflict-banner.stock-alert {
+  background: #fef2f2;
+  border: 1.5px solid #ef4444;
+}
+
+.voice-conflict-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.voice-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.voice-conflict-btn {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.voice-conflict-btn.btn-catalog {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.voice-conflict-btn.btn-catalog:hover {
+  background: #059669;
+}
+
+.voice-conflict-btn.btn-spoken {
+  background: #f59e0b;
+  color: #ffffff;
+}
+
+.voice-conflict-btn.btn-spoken:hover {
+  background: #d97706;
+}
+
+.voice-conflict-btn.btn-action {
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+.voice-conflict-btn.btn-action:hover {
+  background: #4338ca;
+}
+
+.voice-conflict-btn.btn-secondary-opt {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.voice-conflict-btn.btn-secondary-opt:hover {
+  background: #f1f5f9;
+}
+
 /* ============================================================ */
 /* THERMAL POS RECEIPT PRINTER STYLES (80mm & 58mm) */
 /* ============================================================ */
