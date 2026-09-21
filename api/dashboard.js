@@ -17,7 +17,8 @@ module.exports = async function handler(req, res) {
   if (pool) await initSchema();
 
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const clientToday = queryParams.date || new Date().toISOString().split('T')[0];
+    const utcToday = new Date().toISOString().split('T')[0];
 
     if (pool) {
       const invRes = await query('SELECT * FROM invoices WHERE business_id = $1 ORDER BY invoice_date DESC, created_at DESC', [businessId]);
@@ -31,7 +32,7 @@ module.exports = async function handler(req, res) {
 
       const todayInvoices = invoices.filter(i => {
         const invDate = i.invoice_date instanceof Date ? i.invoice_date.toISOString().split('T')[0] : String(i.invoice_date).split('T')[0];
-        return invDate === today;
+        return invDate === clientToday || invDate === utcToday;
       });
 
       const todaySales = todayInvoices.reduce((sum, i) => sum + parseFloat(i.grand_total || 0), 0);
@@ -56,7 +57,10 @@ module.exports = async function handler(req, res) {
       const business = memoryStore.businesses.find(b => b.id === businessId) || {};
       const products = memoryStore.products.filter(p => p.business_id === businessId);
 
-      const todayInvoices = invoices.filter(i => i.invoice_date === today);
+      const todayInvoices = invoices.filter(i => {
+        const invDate = String(i.invoice_date || i.date || '').split('T')[0];
+        return invDate === clientToday || invDate === utcToday;
+      });
       const todaySales = todayInvoices.reduce((sum, i) => sum + (parseFloat(i.grand_total) || 0), 0);
       const totalPaid = invoices.reduce((sum, i) => sum + (parseFloat(i.paid_amount) || 0), 0);
       const totalPending = invoices.reduce((sum, i) => sum + (parseFloat(i.balance_due) || 0), 0);

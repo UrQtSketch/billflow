@@ -55,20 +55,21 @@ module.exports = async function handler(req, res) {
   // POST Create Product
   if (req.method === 'POST') {
     try {
-      const { name, type, sku, price, stock, category } = body || {};
+      const { name, type, sku, price, costPrice, cost_price, stock, category } = body || {};
       if (!name || !name.trim()) return sendError(res, 400, 'Product name is required');
 
       const cleanName = name.trim();
       const cleanType = type === 'service' ? 'service' : 'product';
       const cleanSku = (sku && sku.trim()) || '';
       const cleanPrice = Math.max(0, parseFloat(price) || 0);
+      const cleanCostPrice = Math.max(0, parseFloat(costPrice !== undefined ? costPrice : cost_price) || 0);
       const cleanStock = cleanType === 'service' ? 0 : Math.max(0, parseInt(stock, 10) || 0);
       const cleanCategory = (category && category.trim()) || 'General';
 
       if (pool) {
         const ins = await query(
-          'INSERT INTO products (business_id, name, type, sku, price, stock, category) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-          [businessId, cleanName, cleanType, cleanSku, cleanPrice, cleanStock, cleanCategory]
+          'INSERT INTO products (business_id, name, type, sku, price, cost_price, stock, category) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+          [businessId, cleanName, cleanType, cleanSku, cleanPrice, cleanCostPrice, cleanStock, cleanCategory]
         );
         return sendJson(res, 201, { message: 'Product created', product: ins.rows[0] });
       } else {
@@ -79,6 +80,8 @@ module.exports = async function handler(req, res) {
           type: cleanType,
           sku: cleanSku,
           price: cleanPrice,
+          cost_price: cleanCostPrice,
+          costPrice: cleanCostPrice,
           stock: cleanStock,
           category: cleanCategory,
           created_at: new Date().toISOString()
@@ -94,14 +97,15 @@ module.exports = async function handler(req, res) {
   // PUT Update Product
   if (req.method === 'PUT' && id) {
     try {
-      const { name, type, sku, price, stock, category } = body || {};
+      const { name, type, sku, price, costPrice, cost_price, stock, category } = body || {};
+      const finalCostPrice = costPrice !== undefined ? parseFloat(costPrice) : (cost_price !== undefined ? parseFloat(cost_price) : null);
       if (pool) {
         const upd = await query(
           `UPDATE products
            SET name = COALESCE($1, name), type = COALESCE($2, type), sku = COALESCE($3, sku),
-               price = COALESCE($4, price), stock = COALESCE($5, stock), category = COALESCE($6, category), updated_at = CURRENT_TIMESTAMP
-           WHERE id = $7 AND business_id = $8 RETURNING *`,
-          [name, type, sku, price !== undefined ? parseFloat(price) : null, stock !== undefined ? parseInt(stock, 10) : null, category, id, businessId]
+               price = COALESCE($4, price), cost_price = COALESCE($5, cost_price), stock = COALESCE($6, stock), category = COALESCE($7, category), updated_at = CURRENT_TIMESTAMP
+           WHERE id = $8 AND business_id = $9 RETURNING *`,
+          [name, type, sku, price !== undefined ? parseFloat(price) : null, finalCostPrice, stock !== undefined ? parseInt(stock, 10) : null, category, id, businessId]
         );
         if (!upd || upd.rows.length === 0) return sendError(res, 404, 'Product not found');
         return sendJson(res, 200, { message: 'Product updated', product: upd.rows[0] });
@@ -112,6 +116,7 @@ module.exports = async function handler(req, res) {
         if (type !== undefined) p.type = type;
         if (sku !== undefined) p.sku = sku;
         if (price !== undefined) p.price = parseFloat(price) || 0;
+        if (finalCostPrice !== null) { p.cost_price = finalCostPrice; p.costPrice = finalCostPrice; }
         if (stock !== undefined) p.stock = parseInt(stock, 10) || 0;
         if (category !== undefined) p.category = category;
         return sendJson(res, 200, { message: 'Product updated', product: p });

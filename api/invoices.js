@@ -89,16 +89,17 @@ module.exports = async function handler(req, res) {
         date, dueDate, items, discountType, discountValue, taxRate, paymentMethod, paymentStatus, paidAmount, notes
       } = body || {};
 
-      if (!customerName || !customerName.trim()) return sendError(res, 400, 'Customer name is required');
-      if (!items || !Array.isArray(items) || items.length === 0) return sendError(res, 400, 'At least one line item is required');
+      if (!customerName || !customerName.trim()) return sendError(res, 400, 'Something is not good: Customer name is required (कस्टमर का नाम आवश्यक है)');
+      if (!items || !Array.isArray(items) || items.length === 0) return sendError(res, 400, 'Something is not good: At least one line item is required (कम से कम 1 आइटम जरूरी है)');
 
       let subtotal = 0;
       const validatedItems = [];
       for (const item of items) {
         const qty = parseInt(item.qty, 10);
         const price = parseFloat(item.price);
-        if (isNaN(qty) || qty < 1) return sendError(res, 400, 'Quantities must be positive numbers');
-        if (isNaN(price) || price < 0) return sendError(res, 400, 'Price cannot be negative');
+        if (isNaN(qty) || qty < 1) return sendError(res, 400, `Something is not good: Item "${item.name || 'Item'}" must have a quantity of at least 1 (मात्रा कम से कम 1 होनी चाहिए)`);
+        if (isNaN(price) || price < 0) return sendError(res, 400, `Something is not good: Item "${item.name || 'Item'}" has an invalid price`);
+        if (price === 0) return sendError(res, 400, `Something is not good: Item "${item.name || 'Item'}" has price Rs. 0.00. Please set a valid selling price.`);
         const itemTotal = Math.round(qty * price * 100) / 100;
         subtotal += itemTotal;
         validatedItems.push({

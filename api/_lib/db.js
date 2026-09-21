@@ -75,11 +75,14 @@ async function initSchema() {
       type VARCHAR(20) NOT NULL CHECK (type IN ('product', 'service')),
       sku VARCHAR(100),
       price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      cost_price DECIMAL(12,2) DEFAULT 0.00,
       stock INT DEFAULT 0,
       category VARCHAR(100) DEFAULT 'General',
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
+
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS cost_price DECIMAL(12,2) DEFAULT 0.00;
 
     CREATE TABLE IF NOT EXISTS customers (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

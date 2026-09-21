@@ -105,12 +105,17 @@
     <!-- Sidebar Navigation -->
     <aside class="sidebar" id="sidebar">
       <div class="brand">
-        <div class="logo">B</div>
-        <span>BillFlow</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="logo">B</div>
+          <span>BillFlow</span>
+        </div>
+        <button type="button" class="btn-sidebar-toggle" id="btn-sidebar-collapse" onclick="window.toggleSidebar()" title="Collapse / Hide Sidebar (साइडबार छुपाएं)" aria-label="Toggle Sidebar">⋮</button>
       </div>
       <nav class="nav">
         <button class="active" data-view="dashboard">▦ <span>Dashboard</span></button>
         <button data-view="create-invoice">＋ <span>Create Invoice</span></button>
+        <button data-view="ai-billing" class="nav-ai-btn">✦ <span>AI Billing</span> <span class="ai-nav-badge">FAST</span></button>
+        <button data-view="sales-analysis" class="nav-analysis-btn">📈 <span>Sales Analysis</span> <span class="ai-nav-badge" style="background:#10b981">PROFIT</span></button>
         <button data-view="invoices">▤ <span>Invoices</span><small id="nav-invoices-badge">3</small></button>
         <button data-view="customers">♙ <span>Customers</span></button>
         <button data-view="products">▣ <span>Products & Services</span></button>
@@ -128,20 +133,21 @@
       <!-- Top Header Bar -->
       <header class="top">
         <div style="display:flex;gap:12px;align-items:flex-start">
-          <button class="btn mobile-menu" onclick="toggleMenu()" aria-label="Toggle menu">☰</button>
+          <button class="btn btn-sidebar-toggle-main" id="btn-sidebar-expand" onclick="window.toggleSidebar()" title="Toggle Menu Bar (मेन्यू बार खोलें/छुपाएं)" aria-label="Toggle Menu Bar">⋮</button>
           <div>
             <h1>Good morning 👋</h1>
             <p>Manage your business billing, customers and products from one place.</p>
           </div>
         </div>
         <div class="actions" style="display:flex;align-items:center;gap:8px">
+          <button type="button" class="btn btn-theme-toggle" id="btn-theme-toggle" title="Switch Light/Dark Theme" style="display:inline-flex;align-items:center;gap:6px">
+            <span id="theme-icon">🌙</span> <span id="theme-label">Dark</span>
+          </button>
           <div id="auth-user-badge" style="display:none;align-items:center;gap:8px">
             <span id="user-display-name" style="font-size:13px;font-weight:600;color:var(--text)"></span>
             <button class="btn btn-sm" id="btn-logout" title="Logout from cloud account">Logout</button>
           </div>
           <button class="btn" id="btn-open-auth">🔑 Log In / Sign Up</button>
-          <button class="btn" id="header-btn-customer">＋ Customer</button>
-          <button class="btn primary" id="header-btn-invoice">＋ Create Invoice</button>
         </div>
       </header>
 
@@ -374,6 +380,18 @@
               </div>
             </div>
 
+            <!-- Invoice Mistake & Validation Warning Alert Banner -->
+            <div id="invoice-mistake-alert" style="display:none;margin-top:16px;padding:14px 16px;background:#fef2f2;border:1.5px solid #f87171;border-radius:10px;animation:fadeIn 0.2s ease">
+              <div style="display:flex;align-items:flex-start;gap:10px">
+                <span style="font-size:22px;line-height:1">⚠️</span>
+                <div style="flex:1">
+                  <strong style="color:#b91c1c;font-size:14px;display:block;margin-bottom:4px">Something is not good! (कृपया गलतियाँ ठीक करें)</strong>
+                  <div id="invoice-mistake-list" style="font-size:13px;color:#991b1b;line-height:1.5"></div>
+                </div>
+                <button type="button" onclick="document.getElementById('invoice-mistake-alert').style.display='none'" style="background:none;border:none;color:#b91c1c;cursor:pointer;font-size:16px;padding:2px 6px">✕</button>
+              </div>
+            </div>
+
             <!-- Form Actions -->
             <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px">
               <button type="button" class="btn secondary" id="btn-cancel-edit" style="display:none">Cancel Edit</button>
@@ -415,6 +433,263 @@
               </button>
             </div>
           </section>
+        </div>
+      </div>
+
+      <!-- VIEW 2.5: AI BILLING ASSISTANT (OFFLINE BOOK SHOP FAST COUNTER) -->
+      <div class="view" id="view-ai-billing">
+        <div class="ai-billing-container">
+          <!-- AI Assistant Header Card -->
+          <section class="card panel ai-hero-card">
+            <div class="ai-hero-header">
+              <div class="ai-hero-badge">✦ AI ASSISTANT</div>
+              <h2>Natural-Language Counter Billing</h2>
+              <p class="muted">Fast hands-free billing for offline Book Shops & Retail. Speak or type what was sold in natural Hinglish or English — AI instantly looks up real prices from your catalog and generates an invoice draft for review.</p>
+            </div>
+
+            <!-- Fast Prompt Form with Customer Name & Phone -->
+            <div class="ai-input-wrapper">
+              <!-- Customer Details at Top -->
+              <div class="ai-customer-inputs">
+                <div class="field" style="margin-bottom:0">
+                  <label for="ai-cust-name-input">CUSTOMER NAME</label>
+                  <input type="text" id="ai-cust-name-input" placeholder="e.g. Rahul Sharma, Walk-in">
+                </div>
+                <div class="field" style="margin-bottom:0">
+                  <label for="ai-cust-phone-input">PHONE NUMBER (OPTIONAL)</label>
+                  <input type="text" id="ai-cust-phone-input" placeholder="e.g. +91 98765 43210">
+                </div>
+              </div>
+
+              <label for="ai-prompt-input" class="ai-input-label">STATIONERY & BOOKS SOLD (ENTER ITEMS & RATES)</label>
+              <div class="ai-input-group">
+                <textarea id="ai-prompt-input" rows="2" placeholder='e.g. "2 register 70 me, 5 pen 10 me, 1 practical file 50 me"'></textarea>
+                <button type="button" class="btn primary ai-submit-btn" id="ai-btn-submit">
+                  <span class="btn-text">⚡ Generate Bill</span>
+                  <span class="btn-spinner" style="display:none">⏳ Processing...</span>
+                </button>
+              </div>
+
+              <!-- Suggestion Chips -->
+              <div class="ai-chips-wrapper">
+                <span class="ai-chips-label">Quick examples:</span>
+                <div class="ai-chips">
+                  <button type="button" class="ai-chip" data-query="5 register rs.100 per, 5 copy rs.50 per, cash">"5 register rs.100 per, 5 copy rs.50 per"</button>
+                  <button type="button" class="ai-chip" data-query="2 register 70 me, 5 pen 10 me, 1 practical file 50 me, cash">"2 register 70 me, 5 pen 10 me, 1 file 50 me"</button>
+                  <button type="button" class="ai-chip" data-query="3 classmate copy 60 rs, 2 register 75, 4 blue pen 10 me, UPI">"3 copy 60 rs, 2 register 75, 4 pen 10, UPI"</button>
+                  <button type="button" class="ai-chip" data-query="2 NCERT Maths Class 10 aur 3 registers 70 me, 20 discount">"2 NCERT Maths aur 3 register 70, 20 disc"</button>
+                  <button type="button" class="ai-chip" data-query="NCERT Physics 12th kitni bachi hai?">"NCERT Physics 12th kitni bachi hai?"</button>
+                  <button type="button" class="ai-chip" data-query="कम स्टॉक वाली किताबें दिखाओ">"कम स्टॉक वाली किताबें दिखाओ"</button>
+                </div>
+              </div>
+
+              <!-- How to Use Toggle Button -->
+              <div style="margin-top:14px;display:flex;align-items:center;justify-content:flex-start">
+                <button type="button" class="btn btn-sm btn-how-to-use" id="btn-toggle-how-to-use" onclick="window.toggleHowToUse()" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:7px 14px;background:var(--p-light,#eef0ff);color:var(--p,#5b5cf0);border:1.5px solid #c7d2fe;border-radius:20px;cursor:pointer">
+                  <span>💡 How to Use AI Billing / उपयोग कैसे करें</span>
+                  <span id="how-to-use-arrow" style="font-size:11px">▼</span>
+                </button>
+              </div>
+
+              <!-- Collapsible How to Use / Instructions Guide (Hidden by default, toggled on click) -->
+              <div class="ai-guide-box" id="ai-guide-box" style="display:none;margin-top:12px;background:var(--p-light,#f0f4ff);border:1.5px solid #c7d2fe;border-radius:12px;padding:16px 18px;animation:fadeIn 0.2s ease">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid rgba(0,0,0,0.08);padding-bottom:10px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span style="font-size:20px">📖</span>
+                    <strong style="color:var(--p,#4f46e5);font-size:14px;letter-spacing:0.3px">HOW TO USE AI BILLING GUIDE / बिलिंग निर्देश</strong>
+                  </div>
+                  <button type="button" class="btn-close" onclick="window.toggleHowToUse(false)" title="Close Guide" style="cursor:pointer;font-size:16px;background:none;border:none;color:var(--muted);padding:4px 8px">✕</button>
+                </div>
+
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));gap:14px">
+                  <!-- Method 1: With Saved Catalog -->
+                  <div class="ai-guide-col" style="background:#ffffff;border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="background:#dbeafe;color:#1d4ed8;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:800">METHOD 1 • WITH SAVED CATALOG</span>
+                    </div>
+
+                    <!-- English -->
+                    <div style="font-size:13px;line-height:1.55;color:var(--ink)">
+                      <strong style="color:var(--p,#4f46e5);display:block;margin-bottom:3px">English:</strong>
+                      If you have already added items and their prices in the <strong>Products & Services</strong> section, you only need to enter the <strong>Customer Name</strong> and what was sold (e.g. <code>"2 register, 5 pen, cash"</code>). The AI will automatically look up the prices from your catalog and prepare the invoice.
+                    </div>
+
+                    <!-- Hindi -->
+                    <div style="font-size:13px;line-height:1.55;color:var(--ink);border-top:1px dashed var(--line,#e2e8f0);padding-top:10px">
+                      <strong style="color:#059669;display:block;margin-bottom:3px">हिंदी व्याख्या:</strong>
+                      अगर आपने <strong>Products</strong> सेक्शन में अपनी किताबें, कॉपियां या स्टेशनरी उनके रेट के साथ पहले से सेव कर रखी हैं, तो बस ऊपर Customer Name डालें और यहाँ लिखें क्या-क्या दिया (जैसे: <code>"2 register, 5 pen, cash"</code>). AI अपने आप कैटलॉग से सही कीमत लगाकर बिल बना देगा।
+                    </div>
+                  </div>
+
+                  <!-- Method 2: Direct / No Catalog Needed -->
+                  <div class="ai-guide-col" style="background:#ffffff;border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="background:#fef3c7;color:#92400e;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:800">METHOD 2 • DIRECT / NO CATALOG NEEDED</span>
+                    </div>
+
+                    <!-- English -->
+                    <div style="font-size:13px;line-height:1.55;color:var(--ink)">
+                      <strong style="color:var(--p,#4f46e5);display:block;margin-bottom:3px">English:</strong>
+                      If items are not saved in your catalog, you can write the quantity along with the per-piece rate directly in the prompt (e.g. <code>"5 register rs.100 per, 5 copy rs.50 per"</code> → meaning 1 register @ ₹100 each and 1 copy @ ₹50 each). The AI calculates the totals and prepares the invoice at your custom rates.
+                    </div>
+
+                    <!-- Hindi -->
+                    <div style="font-size:13px;line-height:1.55;color:var(--ink);border-top:1px dashed var(--line,#e2e8f0);padding-top:10px">
+                      <strong style="color:#d97706;display:block;margin-bottom:3px">हिंदी व्याख्या:</strong>
+                      अगर सामान आपके कैटलॉग में सेव नहीं है, तो आप प्रॉम्प्ट में सीधे प्रति-पीस रेट लिख सकते हैं (जैसे: <code>"5 register rs.100 per, 5 copy rs.50 per"</code> यानी 1 रजिस्टर ₹100 का और 1 कॉपी ₹50 की). AI बिना कैटलॉग के भी सीधे आपके बताए रेट पर बिल तैयार कर देगा।
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Dynamic Response & Results Area -->
+          <div id="ai-results-container">
+            <!-- Informational Reply Card (Stock, Low Stock, Search, History) -->
+            <section class="card panel ai-reply-card" id="ai-info-card" style="display:none">
+              <div class="ai-reply-header">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span class="ai-status-dot"></span>
+                  <strong id="ai-info-title">AI Assistant Response</strong>
+                </div>
+                <button type="button" class="btn-close" onclick="document.getElementById('ai-info-card').style.display='none'">✕</button>
+              </div>
+              <div class="ai-reply-content" id="ai-info-message"></div>
+              <div id="ai-info-details" style="margin-top:12px"></div>
+            </section>
+
+            <!-- Ambiguity Resolution Card -->
+            <section class="card panel ai-ambiguity-card" id="ai-ambiguity-card" style="display:none">
+              <div class="ai-reply-header">
+                <div>
+                  <strong style="color:var(--primary)">⚡ Which book / item do you mean?</strong>
+                  <p class="muted" style="margin:2px 0 0;font-size:13px">Multiple products match your search. Pick one to add to the bill:</p>
+                </div>
+              </div>
+              <div class="ai-ambiguity-options" id="ai-ambiguity-list"></div>
+            </section>
+
+            <!-- Invoice Draft Review Card -->
+            <section class="card panel ai-draft-card" id="ai-draft-card" style="display:none">
+              <div class="panel-head ai-draft-header">
+                <div>
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <h2>📝 Invoice Draft (Counter Bill)</h2>
+                    <span class="status pending" id="ai-draft-badge">DRAFT — REVIEW REQUIRED</span>
+                  </div>
+                  <span class="muted">Generated from natural language. Review items and confirm to create invoice.</span>
+                </div>
+                <div class="ai-draft-actions-top">
+                  <button type="button" class="btn btn-sm danger" id="ai-btn-cancel-draft">✕ Discard Draft</button>
+                </div>
+              </div>
+
+              <!-- Customer Details Section -->
+              <div class="ai-draft-section">
+                <div class="ai-section-title">CUSTOMER DETAILS</div>
+                <div class="ai-draft-cust-grid">
+                  <div>
+                    <label>CUSTOMER NAME</label>
+                    <div class="ai-val-box" id="ai-draft-cust-name">—</div>
+                  </div>
+                  <div>
+                    <label>PHONE / CONTACT</label>
+                    <div class="ai-val-box" id="ai-draft-cust-phone">—</div>
+                  </div>
+                  <div>
+                    <label>ACCOUNT STATUS</label>
+                    <div id="ai-draft-cust-status"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Line Items Table -->
+              <div class="ai-draft-section">
+                <div class="ai-section-title">RESOLVED CATALOG ITEMS</div>
+                <div class="table-responsive">
+                  <table class="ai-items-table">
+                    <thead>
+                      <tr>
+                        <th>ITEM / BOOK NAME</th>
+                        <th>SKU / CODE</th>
+                        <th style="text-align:center">QTY</th>
+                        <th style="text-align:right">PRICE (CATALOG)</th>
+                        <th style="text-align:right">TOTAL</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ai-draft-items-tbody">
+                      <!-- Rendered by JS -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Draft Financials & Payment Summary -->
+              <div class="ai-draft-footer-grid">
+                <div class="ai-draft-payment-box">
+                  <div class="field">
+                    <label>PAYMENT METHOD</label>
+                    <select id="ai-draft-payment-method">
+                      <option value="Cash">Cash (Counter)</option>
+                      <option value="UPI">UPI / QR Code</option>
+                      <option value="Card">Debit / Credit Card</option>
+                      <option value="Bank Transfer">Bank Transfer / NEFT</option>
+                    </select>
+                  </div>
+                  <div class="field" style="margin-top:10px">
+                    <label>DISCOUNT (₹)</label>
+                    <input type="number" id="ai-draft-discount" min="0" step="any" value="0">
+                  </div>
+                  <p class="muted" style="font-size:12px;margin-top:10px">
+                    🛡️ <strong>Safety Guarantee:</strong> Discarding this draft creates zero invoices and makes no inventory changes.
+                  </p>
+                </div>
+
+                <div class="calc-summary ai-draft-calc">
+                  <div class="calc-row">
+                    <span>Subtotal:</span>
+                    <strong id="ai-draft-subtotal">₹0.00</strong>
+                  </div>
+                  <div class="calc-row">
+                    <span>Discount:</span>
+                    <span id="ai-draft-discount-val" style="color:var(--danger)">-₹0.00</span>
+                  </div>
+                  <div class="calc-row">
+                    <span>GST / Tax:</span>
+                    <span id="ai-draft-tax">₹0.00</span>
+                  </div>
+                  <div class="calc-row grand-total">
+                    <span>Grand Total:</span>
+                    <span id="ai-draft-grand-total">₹0.00</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- AI Draft Mistake & Validation Warning Alert Banner -->
+              <div id="ai-draft-mistake-alert" style="display:none;margin-top:16px;padding:12px 14px;background:#fef2f2;border:1.5px solid #f87171;border-radius:8px;animation:fadeIn 0.2s ease">
+                <div style="display:flex;align-items:flex-start;gap:8px">
+                  <span style="font-size:20px;line-height:1">⚠️</span>
+                  <div style="flex:1">
+                    <strong style="color:#b91c1c;font-size:13px;display:block;margin-bottom:3px">Something is not good with this draft! (कृपया गलतियाँ ठीक करें)</strong>
+                    <div id="ai-draft-mistake-list" style="font-size:12.5px;color:#991b1b;line-height:1.4"></div>
+                  </div>
+                  <button type="button" onclick="document.getElementById('ai-draft-mistake-alert').style.display='none'" style="background:none;border:none;color:#b91c1c;cursor:pointer;font-size:14px">✕</button>
+                </div>
+              </div>
+
+              <!-- Final Confirm Action Toolbar -->
+              <div class="ai-draft-toolbar">
+                <button type="button" class="btn secondary" id="ai-btn-edit-manual">✎ Edit in Detailed Form</button>
+                <div style="display:flex;gap:10px">
+                  <button type="button" class="btn danger" id="ai-btn-discard-bottom">Discard</button>
+                  <button type="button" class="btn primary ai-confirm-btn" id="ai-btn-confirm-invoice">
+                    ✓ Confirm & Create Invoice →
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
 
@@ -546,6 +821,192 @@
         </section>
       </div>
 
+      <!-- VIEW: BUSINESS SALES ANALYSIS & PROFIT / LOSS -->
+      <div class="view" id="view-sales-analysis">
+        <section class="card panel">
+          <div class="panel-head" style="flex-wrap:wrap;gap:16px">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <h2>📈 Business Sales & Profit Analysis</h2>
+                <span class="tag" style="background:var(--success-bg);color:var(--success);font-weight:700">LIVE TRACKER</span>
+              </div>
+              <span class="muted">दैनिक बिक्री, लाभ और हानि का विश्लेषण (Daily Total Sales, Revenue & Net Profit Tracker)</span>
+            </div>
+            <!-- Range Filter Buttons -->
+            <div class="analysis-filter-bar" style="display:flex;gap:6px;flex-wrap:wrap">
+              <button type="button" class="btn btn-sm analysis-filter-btn" data-range="today">Today (आज)</button>
+              <button type="button" class="btn btn-sm analysis-filter-btn active" data-range="7days">Last 7 Days</button>
+              <button type="button" class="btn btn-sm analysis-filter-btn" data-range="30days">Last 30 Days</button>
+              <button type="button" class="btn btn-sm analysis-filter-btn" data-range="this_month">This Month</button>
+              <button type="button" class="btn btn-sm analysis-filter-btn" data-range="all">All Time</button>
+            </div>
+          </div>
+
+          <!-- Key Metrics / Stat Cards Row -->
+          <div class="stats" style="margin-top:16px">
+            <div class="card stat" style="border-left:4px solid var(--p)">
+              <span class="stat-icon">💰</span>
+              <div class="value" id="analysis-stat-sales">₹0.00</div>
+              <p class="muted">Total Sales (कुल बिक्री)</p>
+            </div>
+            <div class="card stat" style="border-left:4px solid var(--success)">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <span class="stat-icon">📈</span>
+                <span class="badge-profit" id="analysis-margin-badge">+0.0% Margin</span>
+              </div>
+              <div class="value" id="analysis-stat-profit" style="color:var(--success)">₹0.00</div>
+              <p class="muted">Net Profit (शुद्ध लाभ)</p>
+            </div>
+            <div class="card stat" style="border-left:4px solid var(--info)">
+              <span class="stat-icon">🧾</span>
+              <div class="value" id="analysis-stat-invoices">0</div>
+              <p class="muted">Total Bills (कुल इनवॉइस)</p>
+            </div>
+            <div class="card stat" style="border-left:4px solid var(--warning)">
+              <span class="stat-icon">🎯</span>
+              <div class="value" id="analysis-stat-aov">₹0.00</div>
+              <p class="muted">Avg. Bill Value (औसत बिक्री)</p>
+            </div>
+          </div>
+
+          <!-- Second Stat Row: Paid vs Pending -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:16px">
+            <div class="analysis-mini-card" style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--bg);border:1px solid var(--line);border-radius:10px">
+              <div>
+                <span class="muted" style="font-size:12px;font-weight:700">CASH / UPI COLLECTED</span>
+                <div style="font-size:18px;font-weight:800;color:var(--success);margin-top:2px" id="analysis-stat-paid">₹0.00</div>
+              </div>
+              <span style="font-size:24px">💵</span>
+            </div>
+            <div class="analysis-mini-card" style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--bg);border:1px solid var(--line);border-radius:10px">
+              <div>
+                <span class="muted" style="font-size:12px;font-weight:700">PENDING BALANCE (उधारी / बकाया)</span>
+                <div style="font-size:18px;font-weight:800;color:var(--warning);margin-top:2px" id="analysis-stat-pending">₹0.00</div>
+              </div>
+              <span style="font-size:24px">⏳</span>
+            </div>
+            <div class="analysis-mini-card" style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--bg);border:1px solid var(--line);border-radius:10px">
+              <div>
+                <span class="muted" style="font-size:12px;font-weight:700">TOTAL EST. COST / EXPENSES</span>
+                <div style="font-size:18px;font-weight:800;color:var(--muted);margin-top:2px" id="analysis-stat-cost">₹0.00</div>
+              </div>
+              <span style="font-size:24px">📦</span>
+            </div>
+          </div>
+
+          <!-- Visual Charts Grid Row -->
+          <div class="analysis-charts-grid" style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-top:24px">
+            <!-- Chart 1: Daily Sales & Revenue Trend -->
+            <div class="card" style="padding:18px;border:1px solid var(--line);background:var(--panel);border-radius:12px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <div>
+                  <h3 style="margin:0;font-size:15px;font-weight:700">📊 Daily Total Sales & Revenue Graph</h3>
+                  <span class="muted" style="font-size:12px">रोजाना की बिक्री का चार्ट (Day-wise total sales)</span>
+                </div>
+                <span class="muted" id="analysis-chart-period" style="font-size:12px;font-weight:600">Last 7 Days</span>
+              </div>
+              <div id="daily-sales-chart-container" style="width:100%;min-height:220px;display:flex;align-items:center;justify-content:center">
+                <!-- Dynamically rendered SVG interactive chart -->
+              </div>
+            </div>
+
+            <!-- Chart 2: Profit vs Cost Breakdown Meter -->
+            <div class="card" style="padding:18px;border:1px solid var(--line);background:var(--panel);border-radius:12px;display:flex;flex-direction:column;justify-content:space-between">
+              <div>
+                <h3 style="margin:0;font-size:15px;font-weight:700">⚖️ Profit & Loss Breakdown</h3>
+                <span class="muted" style="font-size:12px">बिक्री बनाम लागत और शुद्ध मुनाफा</span>
+                
+                <div style="margin-top:20px">
+                  <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+                    <span>Total Sales Revenue</span>
+                    <strong id="pnl-sales-val">₹0.00</strong>
+                  </div>
+                  <div class="progress-bar-bg" style="height:10px;background:var(--line);border-radius:5px;overflow:hidden">
+                    <div id="pnl-sales-bar" style="height:100%;width:100%;background:var(--p);border-radius:5px;transition:width 0.4s ease"></div>
+                  </div>
+                </div>
+
+                <div style="margin-top:16px">
+                  <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+                    <span style="color:var(--muted)">Estimated Cost / Purchase</span>
+                    <strong id="pnl-cost-val" style="color:var(--muted)">₹0.00</strong>
+                  </div>
+                  <div class="progress-bar-bg" style="height:10px;background:var(--line);border-radius:5px;overflow:hidden">
+                    <div id="pnl-cost-bar" style="height:100%;width:0%;background:#94a3b8;border-radius:5px;transition:width 0.4s ease"></div>
+                  </div>
+                </div>
+
+                <div style="margin-top:16px">
+                  <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+                    <span style="color:var(--success);font-weight:700">Net Business Profit (शुद्ध लाभ)</span>
+                    <strong id="pnl-profit-val" style="color:var(--success)">₹0.00</strong>
+                  </div>
+                  <div class="progress-bar-bg" style="height:10px;background:var(--line);border-radius:5px;overflow:hidden">
+                    <div id="pnl-profit-bar" style="height:100%;width:0%;background:var(--success);border-radius:5px;transition:width 0.4s ease"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="pnl-summary-box" style="margin-top:20px;padding:12px;border-radius:8px;background:var(--success-bg);border:1px solid rgba(34,197,94,0.3);font-size:12px">
+                <span style="font-weight:700;color:var(--success)">💡 Profitability Health:</span>
+                <span id="pnl-health-msg" style="color:var(--ink);display:block;margin-top:2px">Your business is running with a healthy profit margin.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Secondary Grid: Top Products & Payment Modes -->
+          <div class="analysis-secondary-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px">
+            <!-- Top Selling Items -->
+            <div class="card" style="padding:18px;border:1px solid var(--line);background:var(--panel);border-radius:12px">
+              <h3 style="margin:0 0 4px;font-size:15px;font-weight:700">🏆 Top Selling Items (सबसे ज्यादा बिकने वाले सामान)</h3>
+              <span class="muted" style="font-size:12px">Top performing products by revenue & units</span>
+              <div id="analysis-top-products-list" style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+
+            <!-- Payment Methods Share -->
+            <div class="card" style="padding:18px;border:1px solid var(--line);background:var(--panel);border-radius:12px">
+              <h3 style="margin:0 0 4px;font-size:15px;font-weight:700">💳 Payment Mode Breakdown (भुगतान के तरीके)</h3>
+              <span class="muted" style="font-size:12px">Distribution across Cash, UPI, Bank Transfer & Card</span>
+              <div id="analysis-payment-list" style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Daily Sales Log Table -->
+          <div style="margin-top:28px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+              <div>
+                <h3 style="margin:0;font-size:16px;font-weight:700">📅 Daily Sales & Profit Log (दैनिक बिक्री का विवरण)</h3>
+                <span class="muted" style="font-size:12px">Day-by-day record of total sales, costs and profit margin</span>
+              </div>
+              <button type="button" class="btn btn-sm" onclick="window.exportSalesAnalysisCSV()">📥 Export Report (CSV)</button>
+            </div>
+
+            <div class="table-container">
+              <table class="invoice-list">
+                <thead>
+                  <tr>
+                    <th>Date (तारीख)</th>
+                    <th>Invoices (बिल)</th>
+                    <th>Total Sales (बिक्री)</th>
+                    <th>Est. Cost (लागत)</th>
+                    <th>Net Profit (लाभ)</th>
+                    <th>Profit Margin</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="analysis-daily-tbody">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+
       <!-- VIEW 6: BUSINESS SETTINGS -->
       <div class="view" id="view-settings">
         <section class="card panel" style="max-width:850px;margin:0 auto">
@@ -670,8 +1131,13 @@
             </div>
 
             <div class="field">
-              <label>UNIT PRICE (₹) *</label>
+              <label>SELLING PRICE (₹) *</label>
               <input type="number" id="prod-price" min="0" step="any" required placeholder="0.00">
+            </div>
+
+            <div class="field">
+              <label>COST / PURCHASE PRICE (₹) (OPTIONAL)</label>
+              <input type="number" id="prod-cost-price" min="0" step="any" placeholder="Purchase cost per unit">
             </div>
 
             <div class="field form-full" id="prod-stock-field">

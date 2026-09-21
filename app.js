@@ -314,6 +314,7 @@
         sku: prod.sku || '',
         category: prod.category || 'General',
         price: Number(prod.price) || 0,
+        costPrice: Number(prod.cost_price !== undefined ? prod.cost_price : prod.costPrice) || 0,
         stock: Number(prod.stock) || 0,
         createdAt: prod.created_at || prod.createdAt
       };
@@ -496,6 +497,18 @@
         method: 'DELETE'
       });
       return res.json();
+    },
+    async sendAiQuery(businessId, prompt, customerName = '', customerPhone = '') {
+      const res = await fetch(`/api/ai?businessId=${encodeURIComponent(businessId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, customerName, customerPhone })
+      });
+      return res.json();
+    },
+    async fetchAnalytics(businessId, range = '7days') {
+      const res = await fetch(`/api/analytics?businessId=${encodeURIComponent(businessId)}&range=${encodeURIComponent(range)}&date=${encodeURIComponent(Utils.todayYMD())}`);
+      return res.json();
     }
   };
 
@@ -617,18 +630,7 @@
         });
       });
 
-      // Header action buttons
-      const btnAddCustomer = document.getElementById('header-btn-customer');
-      if (btnAddCustomer) {
-        btnAddCustomer.addEventListener('click', () => CustomerController.openAddModal());
-      }
-      const btnCreateInvoice = document.getElementById('header-btn-invoice');
-      if (btnCreateInvoice) {
-        btnCreateInvoice.addEventListener('click', () => {
-          InvoiceController.resetForm();
-          this.switchView('create-invoice');
-        });
-      }
+
     },
     switchView(viewName) {
       // If leaving edit mode without saving, discard uncommitted edit session
@@ -653,11 +655,13 @@
 
       // Trigger view renders
       if (viewName === 'dashboard') DashboardController.render();
+      if (viewName === 'sales-analysis') SalesAnalysisController.render();
       if (viewName === 'invoices') InvoicesListController.render();
       if (viewName === 'customers') CustomerController.renderList();
       if (viewName === 'products') ProductController.renderList();
       if (viewName === 'settings') SettingsController.loadSettings();
       if (viewName === 'create-invoice') InvoiceController.syncFormWithSettings();
+      if (viewName === 'ai-billing') AiBillingController.init();
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -669,6 +673,7 @@
       const invoices = Store.getInvoices();
       const settings = Store.getSettings();
       const today = Utils.todayYMD();
+      const todayUtc = new Date().toISOString().split('T')[0];
 
       let todaySales = 0;
       let totalPaid = 0;
@@ -676,7 +681,8 @@
       let totalCount = invoices.length;
 
       invoices.forEach(inv => {
-        if (inv.date === today) {
+        const invDate = String(inv.date || '').split('T')[0];
+        if (invDate === today || invDate === todayUtc) {
           todaySales += Number(inv.grandTotal || 0);
         }
         totalPaid += Number(inv.paidAmount || 0);
@@ -729,6 +735,490 @@
         }).join('');
       }
     }
+  };
+
+  // --- BUSINESS SALES ANALYSIS & PROFIT/LOSS CONTROLLER ---
+  const SalesAnalysisController = {
+    activeRange: '7days',
+    cachedData: null,
+
+    init() {
+      // Range button click handlers
+      document.querySelectorAll('.analysis-filter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const range = btn.getAttribute('data-range') || '7days';
+          this.setRange(range);
+        });
+      });
+    },
+
+    setRange(range) {
+      this.activeRange = range;
+      document.querySelectorAll('.analysis-filter-btn').forEach(btn => {
+        if (btn.getAttribute('data-range') === range) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+      this.render();
+    },
+
+    async render() {
+      const settings = Store.getSettings();
+      const currency = settings.currency || '₹';
+
+      // Update range period text
+      const periodMap = {
+        today: 'Today (आज)',
+        '7days': 'Last 7 Days',
+        '30days': 'Last 30 Days',
+        this_month: 'This Month',
+        all: 'All Time'
+      };
+      const periodEl = document.getElementById('analysis-chart-period');
+      if (periodEl) periodEl.textContent = periodMap[this.activeRange] || 'Last 7 Days';
+
+      let analyticsData = null;
+
+      if (AuthController.isAuthenticated()) {
+        const activeBizId = AuthController.getActiveBusinessId();
+        try {
+          const res = await ApiClient.fetchAnalytics(activeBizId, this.activeRange);
+          if (res && res.summary) {
+            analyticsData = res;
+          }
+        } catch (err) {
+          console.warn('Could not fetch cloud analytics, falling back to local calculation', err);
+        }
+      }
+
+      // Local Calculation if not authenticated or offline
+      if (!analyticsData) {
+        analyticsData = this.computeLocalAnalytics(this.activeRange, currency);
+      }
+
+      this.cachedData = analyticsData;
+
+      // 1. Update Stat Cards
+      const summary = analyticsData.summary || {};
+      const elSales = document.getElementById('analysis-stat-sales');
+      if (elSales) elSales.textContent = Utils.formatCurrency(summary.totalSales || 0, currency);
+
+      const elProfit = document.getElementById('analysis-stat-profit');
+      if (elProfit) elProfit.textContent = Utils.formatCurrency(summary.netProfit || 0, currency);
+
+      const elMargin = document.getElementById('analysis-margin-badge');
+      if (elMargin) {
+        const m = Number(summary.profitMargin) || 0;
+        elMargin.textContent = `${m >= 0 ? '+' : ''}${m.toFixed(1)}% Margin`;
+        elMargin.style.background = m >= 0 ? 'var(--success-bg)' : 'var(--danger-bg)';
+        elMargin.style.color = m >= 0 ? 'var(--success)' : 'var(--danger)';
+      }
+
+      const elInvoices = document.getElementById('analysis-stat-invoices');
+      if (elInvoices) elInvoices.textContent = summary.totalInvoices || 0;
+
+      const elAov = document.getElementById('analysis-stat-aov');
+      if (elAov) elAov.textContent = Utils.formatCurrency(summary.avgOrderValue || 0, currency);
+
+      const elPaid = document.getElementById('analysis-stat-paid');
+      if (elPaid) elPaid.textContent = Utils.formatCurrency(summary.paidAmount || 0, currency);
+
+      const elPending = document.getElementById('analysis-stat-pending');
+      if (elPending) elPending.textContent = Utils.formatCurrency(summary.pendingAmount || 0, currency);
+
+      const elCost = document.getElementById('analysis-stat-cost');
+      if (elCost) elCost.textContent = Utils.formatCurrency(summary.totalCost || 0, currency);
+
+      // 2. Update Profit & Loss Meters
+      const totSales = summary.totalSales || 0;
+      const totCost = summary.totalCost || 0;
+      const netProfit = summary.netProfit || 0;
+
+      const pnlSales = document.getElementById('pnl-sales-val');
+      if (pnlSales) pnlSales.textContent = Utils.formatCurrency(totSales, currency);
+
+      const pnlCost = document.getElementById('pnl-cost-val');
+      if (pnlCost) pnlCost.textContent = Utils.formatCurrency(totCost, currency);
+
+      const pnlProfit = document.getElementById('pnl-profit-val');
+      if (pnlProfit) pnlProfit.textContent = Utils.formatCurrency(netProfit, currency);
+
+      const pnlSalesBar = document.getElementById('pnl-sales-bar');
+      if (pnlSalesBar) pnlSalesBar.style.width = totSales > 0 ? '100%' : '0%';
+
+      const pnlCostBar = document.getElementById('pnl-cost-bar');
+      if (pnlCostBar) {
+        const costPct = totSales > 0 ? Math.min(100, Math.round((totCost / totSales) * 100)) : 0;
+        pnlCostBar.style.width = `${costPct}%`;
+      }
+
+      const pnlProfitBar = document.getElementById('pnl-profit-bar');
+      if (pnlProfitBar) {
+        const profPct = totSales > 0 ? Math.min(100, Math.max(0, Math.round((netProfit / totSales) * 100))) : 0;
+        pnlProfitBar.style.width = `${profPct}%`;
+      }
+
+      const healthMsg = document.getElementById('pnl-health-msg');
+      const healthBox = document.getElementById('pnl-summary-box');
+      if (healthMsg && healthBox) {
+        if (totSales === 0) {
+          healthMsg.textContent = 'No sales recorded for this timeframe yet.';
+          healthBox.style.background = 'var(--bg)';
+        } else if (netProfit > 0) {
+          healthMsg.textContent = `Excellent! Business is generating a healthy ${summary.profitMargin}% net profit margin.`;
+          healthBox.style.background = 'var(--success-bg)';
+        } else if (netProfit === 0) {
+          healthMsg.textContent = 'Business is currently at break-even point.';
+          healthBox.style.background = 'var(--warning-bg)';
+        } else {
+          healthMsg.textContent = 'Warning: Costs exceed revenue for this period.';
+          healthBox.style.background = 'var(--danger-bg)';
+        }
+      }
+
+      // 3. Render Interactive Daily Sales SVG Chart
+      this.renderDailySalesChart(analyticsData.dailyTrend || [], currency);
+
+      // 4. Render Top Products
+      this.renderTopProducts(analyticsData.topProducts || [], currency, totSales);
+
+      // 5. Render Payment Modes
+      this.renderPaymentBreakdown(analyticsData.paymentBreakdown || {}, currency, totSales);
+
+      // 6. Render Daily Sales Log Table
+      this.renderDailyLogTable(analyticsData.dailyTrend || [], currency);
+    },
+
+    computeLocalAnalytics(range, currency) {
+      const invoices = Store.getInvoices();
+      const products = Store.getProducts();
+      const now = new Date();
+      const todayStr = Utils.todayYMD();
+      const todayUtc = now.toISOString().split('T')[0];
+
+      let startDate = new Date();
+      if (range === 'today') {
+        startDate.setHours(0, 0, 0, 0);
+      } else if (range === '7days') {
+        startDate.setDate(startDate.getDate() - 6);
+        startDate.setHours(0, 0, 0, 0);
+      } else if (range === '30days') {
+        startDate.setDate(startDate.getDate() - 29);
+        startDate.setHours(0, 0, 0, 0);
+      } else if (range === 'this_month') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (range === 'all') {
+        startDate = new Date(2000, 0, 1);
+      }
+
+      const startMonth = String(startDate.getMonth() + 1).padStart(2, '0');
+      const startDay = String(startDate.getDate()).padStart(2, '0');
+      const startDateStr = `${startDate.getFullYear()}-${startMonth}-${startDay}`;
+
+      const filteredInvoices = invoices.filter(inv => {
+        const invDate = String(inv.date || '').split('T')[0];
+        if (!invDate) return false;
+        if (range === 'today') {
+          return invDate === todayStr || invDate === todayUtc;
+        }
+        if (range === 'this_month') {
+          const cMonth = todayStr.substring(0, 7);
+          const uMonth = todayUtc.substring(0, 7);
+          return invDate.startsWith(cMonth) || invDate.startsWith(uMonth);
+        }
+        if (range === 'all') {
+          return true;
+        }
+        return invDate >= startDateStr;
+      });
+
+      let totalSales = 0;
+      let totalPaid = 0;
+      let totalPending = 0;
+      let totalCost = 0;
+      let productSalesMap = {};
+      let paymentMethodMap = { Cash: 0, UPI: 0, 'Bank Transfer': 0, Card: 0, Cheque: 0, Other: 0 };
+      let dailyMap = {};
+
+      // Pre-fill all dates for 7-day range so every day shows cleanly on graph
+      if (range === '7days') {
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          const dStr = `${d.getFullYear()}-${m}-${day}`;
+          dailyMap[dStr] = { date: dStr, invoicesCount: 0, sales: 0, cost: 0, profit: 0 };
+        }
+      }
+
+      filteredInvoices.forEach(inv => {
+        const invDate = String(inv.date || '').split('T')[0];
+        const gTotal = Number(inv.grandTotal) || 0;
+        const paid = Number(inv.paidAmount) || 0;
+        const due = Number(inv.balanceDue) || 0;
+
+        totalSales += gTotal;
+        totalPaid += paid;
+        totalPending += due;
+
+        const pMethod = inv.paymentMethod || 'Cash';
+        if (paymentMethodMap[pMethod] !== undefined) {
+          paymentMethodMap[pMethod] += gTotal;
+        } else {
+          paymentMethodMap['Other'] = (paymentMethodMap['Other'] || 0) + gTotal;
+        }
+
+        let invoiceCost = 0;
+        const items = inv.items || [];
+        if (items.length > 0) {
+          items.forEach(it => {
+            const qty = Number(it.qty) || 1;
+            const price = Number(it.price) || 0;
+            const total = Number(it.total) || (price * qty);
+            const prod = products.find(p => p.id === it.productId || (p.name && p.name.toLowerCase() === (it.name || '').toLowerCase()));
+            const unitCost = prod && (prod.costPrice !== undefined || prod.cost_price !== undefined)
+              ? Number(prod.costPrice || prod.cost_price || 0)
+              : (price * 0.70);
+            const itemCost = unitCost * qty;
+            invoiceCost += itemCost;
+
+            const pName = it.name || (prod ? prod.name : 'Unknown Item');
+            if (!productSalesMap[pName]) {
+              productSalesMap[pName] = { name: pName, qty: 0, revenue: 0, profit: 0 };
+            }
+            productSalesMap[pName].qty += qty;
+            productSalesMap[pName].revenue += total;
+            productSalesMap[pName].profit += (total - itemCost);
+          });
+        } else {
+          invoiceCost = gTotal * 0.70;
+        }
+
+        totalCost += invoiceCost;
+        const netProfit = gTotal - invoiceCost;
+
+        if (!dailyMap[invDate]) {
+          dailyMap[invDate] = { date: invDate, invoicesCount: 0, sales: 0, cost: 0, profit: 0 };
+        }
+        dailyMap[invDate].invoicesCount += 1;
+        dailyMap[invDate].sales += gTotal;
+        dailyMap[invDate].cost += invoiceCost;
+        dailyMap[invDate].profit += netProfit;
+      });
+
+      const netProfit = totalSales - totalCost;
+      const profitMargin = totalSales > 0 ? ((netProfit / totalSales) * 100) : 0;
+      const avgOrderValue = filteredInvoices.length > 0 ? (totalSales / filteredInvoices.length) : 0;
+
+      const dailyTrend = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
+      const topProducts = Object.values(productSalesMap).sort((a, b) => b.revenue - a.revenue).slice(0, 6);
+
+      return {
+        range,
+        currency,
+        summary: {
+          totalSales: Math.round(totalSales * 100) / 100,
+          totalCost: Math.round(totalCost * 100) / 100,
+          netProfit: Math.round(netProfit * 100) / 100,
+          profitMargin: Math.round(profitMargin * 10) / 10,
+          totalInvoices: filteredInvoices.length,
+          avgOrderValue: Math.round(avgOrderValue * 100) / 100,
+          paidAmount: Math.round(totalPaid * 100) / 100,
+          pendingAmount: Math.round(totalPending * 100) / 100
+        },
+        dailyTrend,
+        topProducts,
+        paymentBreakdown: paymentMethodMap
+      };
+    },
+
+    renderDailySalesChart(dailyTrend, currency) {
+      const container = document.getElementById('daily-sales-chart-container');
+      if (!container) return;
+
+      if (!dailyTrend || dailyTrend.length === 0 || dailyTrend.every(d => d.sales === 0)) {
+        container.innerHTML = `
+          <div style="text-align:center;padding:30px 10px;color:var(--muted)">
+            <div style="font-size:32px;margin-bottom:8px">📊</div>
+            <strong>No sales recorded for this time range</strong>
+            <p style="font-size:12px;margin-top:4px">Create invoices or AI Counter Bills to see your sales & profit trend graph.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const maxSales = Math.max(...dailyTrend.map(d => d.sales), 100);
+      const chartHeight = 150;
+      const chartWidth = 540;
+      const barWidth = Math.max(14, Math.min(36, Math.floor((chartWidth - 60) / dailyTrend.length) - 10));
+      const xSpacing = (chartWidth - 60) / dailyTrend.length;
+
+      let barsSvg = '';
+      dailyTrend.forEach((day, idx) => {
+        const barH = Math.max(4, Math.round((day.sales / maxSales) * chartHeight));
+        const x = 40 + idx * xSpacing + (xSpacing - barWidth) / 2;
+        const y = 180 - barH;
+
+        const dateObj = new Date(day.date + 'T00:00:00');
+        const dayLabel = isNaN(dateObj.getTime()) ? day.date : dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+        const barColor = day.sales > 0 ? 'url(#barGradientSales)' : 'var(--line)';
+
+        barsSvg += `
+          <g class="chart-bar-group">
+            <rect x="${x - 4}" y="10" width="${barWidth + 8}" height="180" fill="transparent">
+              <title>${dayLabel}: Sales ${Utils.formatCurrency(day.sales, currency)} | Profit ${Utils.formatCurrency(day.profit, currency)} (${day.invoicesCount} bills)</title>
+            </rect>
+            <rect x="${x}" y="20" width="${barWidth}" height="${chartHeight + 10}" rx="4" fill="var(--bg)" opacity="0.6" />
+            <rect class="chart-bar-rect" x="${x}" y="${y}" width="${barWidth}" height="${barH}" rx="4" fill="${barColor}">
+              <title>${dayLabel}: Sales ${Utils.formatCurrency(day.sales, currency)} | Profit ${Utils.formatCurrency(day.profit, currency)}</title>
+            </rect>
+            ${day.sales > 0 ? `<text x="${x + barWidth / 2}" y="${y - 5}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--ink)">${Math.round(day.sales)}</text>` : ''}
+            <text x="${x + barWidth / 2}" y="200" text-anchor="middle" font-size="11" fill="var(--muted)" font-weight="500">${dayLabel}</text>
+          </g>
+        `;
+      });
+
+      container.innerHTML = `
+        <svg class="chart-svg" viewBox="0 0 ${chartWidth} 215" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <linearGradient id="barGradientSales" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#6366f1" />
+              <stop offset="100%" stop-color="#4f46e5" />
+            </linearGradient>
+            <linearGradient id="barGradientProfit" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#22c55e" />
+              <stop offset="100%" stop-color="#15803d" />
+            </linearGradient>
+          </defs>
+          <line x1="30" y1="20" x2="${chartWidth - 10}" y2="20" stroke="var(--line)" stroke-dasharray="3,3" />
+          <line x1="30" y1="100" x2="${chartWidth - 10}" y2="100" stroke="var(--line)" stroke-dasharray="3,3" />
+          <line x1="30" y1="180" x2="${chartWidth - 10}" y2="180" stroke="var(--line)" />
+          <text x="25" y="24" text-anchor="end" font-size="10" fill="var(--muted)">${Math.round(maxSales)}</text>
+          <text x="25" y="104" text-anchor="end" font-size="10" fill="var(--muted)">${Math.round(maxSales / 2)}</text>
+          <text x="25" y="184" text-anchor="end" font-size="10" fill="var(--muted)">0</text>
+          ${barsSvg}
+        </svg>
+      `;
+    },
+
+    renderTopProducts(topProducts, currency, totalSales) {
+      const container = document.getElementById('analysis-top-products-list');
+      if (!container) return;
+
+      if (!topProducts || topProducts.length === 0) {
+        container.innerHTML = `<div class="muted" style="font-size:12px;text-align:center;padding:16px">No products sold in this period.</div>`;
+        return;
+      }
+
+      container.innerHTML = topProducts.map((p, idx) => {
+        const share = totalSales > 0 ? Math.round((p.revenue / totalSales) * 100) : 0;
+        return `
+          <div class="analysis-product-row">
+            <div style="flex:1;min-width:0;margin-right:12px">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:11px;font-weight:700;color:var(--p);background:var(--p-light);padding:1px 6px;border-radius:4px">#${idx + 1}</span>
+                <strong style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${Utils.escapeHtml(p.name)}</strong>
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">${p.qty} unit(s) sold • ${share}% of total sales</div>
+            </div>
+            <div style="text-align:right">
+              <strong style="font-size:13px;color:var(--ink)">${Utils.formatCurrency(p.revenue, currency)}</strong>
+              <div style="font-size:11px;color:var(--success);font-weight:600">+${Utils.formatCurrency(p.profit, currency)} profit</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    },
+
+    renderPaymentBreakdown(paymentMap, currency, totalSales) {
+      const container = document.getElementById('analysis-payment-list');
+      if (!container) return;
+
+      const entries = Object.entries(paymentMap).filter(([_, val]) => val > 0);
+      if (entries.length === 0) {
+        container.innerHTML = `<div class="muted" style="font-size:12px;text-align:center;padding:16px">No payment records found.</div>`;
+        return;
+      }
+
+      const icons = { Cash: '💵', UPI: '📱', 'Bank Transfer': '🏦', Card: '💳', Cheque: '📝', Other: '🪙' };
+
+      container.innerHTML = entries.map(([method, amount]) => {
+        const pct = totalSales > 0 ? Math.round((amount / totalSales) * 100) : 0;
+        const icon = icons[method] || '💵';
+        return `
+          <div class="analysis-payment-row">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:18px">${icon}</span>
+              <div>
+                <strong style="font-size:13px">${Utils.escapeHtml(method)}</strong>
+                <div style="font-size:11px;color:var(--muted)">${pct}% of all transactions</div>
+              </div>
+            </div>
+            <strong style="font-size:13px;color:var(--ink)">${Utils.formatCurrency(amount, currency)}</strong>
+          </div>
+        `;
+      }).join('');
+    },
+
+    renderDailyLogTable(dailyTrend, currency) {
+      const tbody = document.getElementById('analysis-daily-tbody');
+      if (!tbody) return;
+
+      const activeDays = (dailyTrend || []).filter(d => d.sales > 0 || d.invoicesCount > 0);
+      if (activeDays.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><p>No sales activity recorded for this period.</p></td></tr>`;
+        return;
+      }
+
+      const sorted = [...activeDays].sort((a, b) => b.date.localeCompare(a.date));
+
+      tbody.innerHTML = sorted.map(d => {
+        const margin = d.sales > 0 ? ((d.profit / d.sales) * 100) : 0;
+        const isProfitable = d.profit >= 0;
+        const statusClass = isProfitable ? 'paid' : 'pending';
+        const statusText = isProfitable ? 'Profitable (लाभ)' : 'Loss (हानि)';
+
+        return `
+          <tr>
+            <td><strong>${Utils.formatDate(d.date)}</strong></td>
+            <td><span class="badge" style="background:var(--bg);border:1px solid var(--line);padding:2px 8px;border-radius:6px">${d.invoicesCount} bill(s)</span></td>
+            <td><strong>${Utils.formatCurrency(d.sales, currency)}</strong></td>
+            <td class="muted">${Utils.formatCurrency(d.cost, currency)}</td>
+            <td><strong style="color:${isProfitable ? 'var(--success)' : 'var(--danger)'}">${Utils.formatCurrency(d.profit, currency)}</strong></td>
+            <td><span class="badge-profit" style="${!isProfitable ? 'background:var(--danger-bg);color:var(--danger)' : ''}">${margin.toFixed(1)}%</span></td>
+            <td><span class="status ${statusClass}">${statusText}</span></td>
+          </tr>
+        `;
+      }).join('');
+    }
+  };
+
+  window.exportSalesAnalysisCSV = function () {
+    if (!SalesAnalysisController.cachedData || !SalesAnalysisController.cachedData.dailyTrend) {
+      Toast.show('No data available to export', 'error');
+      return;
+    }
+
+    const data = SalesAnalysisController.cachedData.dailyTrend;
+    let csvContent = 'Date,Invoices Count,Total Sales,Estimated Cost,Net Profit,Profit Margin Percent\n';
+    data.forEach(d => {
+      const m = d.sales > 0 ? ((d.profit / d.sales) * 100).toFixed(1) : '0.0';
+      csvContent += `"${d.date}",${d.invoicesCount},${d.sales.toFixed(2)},${d.cost.toFixed(2)},${d.profit.toFixed(2)},${m}%\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Business_Sales_Profit_Analysis_${SalesAnalysisController.activeRange}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    Toast.show('Sales Analysis report exported as CSV!', 'success');
   };
 
   // --- SETTINGS CONTROLLER ---
@@ -1043,6 +1533,8 @@
       this.editingId = null;
       document.getElementById('modal-product-title').textContent = 'Add Product / Service';
       document.getElementById('form-product').reset();
+      const costEl = document.getElementById('prod-cost-price');
+      if (costEl) costEl.value = '';
       document.getElementById('prod-stock-field').style.display = 'flex';
       Modal.open('modal-product');
     },
@@ -1058,6 +1550,8 @@
       document.getElementById('prod-sku').value = product.sku || '';
       document.getElementById('prod-category').value = product.category || '';
       document.getElementById('prod-price').value = product.price || 0;
+      const costEl = document.getElementById('prod-cost-price');
+      if (costEl) costEl.value = product.costPrice !== undefined ? product.costPrice : (product.cost_price !== undefined ? product.cost_price : '');
       document.getElementById('prod-stock').value = product.stock || 0;
 
       const stockField = document.getElementById('prod-stock-field');
@@ -1073,6 +1567,7 @@
       const sku = document.getElementById('prod-sku').value.trim();
       const category = document.getElementById('prod-category').value.trim() || 'General';
       const price = parseFloat(document.getElementById('prod-price').value) || 0;
+      const costPrice = Math.max(0, parseFloat(document.getElementById('prod-cost-price')?.value) || 0);
       const stock = type === 'service' ? 0 : (parseInt(document.getElementById('prod-stock').value, 10) || 0);
 
       if (!name) {
@@ -1090,7 +1585,7 @@
         if (AuthController.isAuthenticated()) {
           const activeBizId = AuthController.getActiveBusinessId();
           try {
-            const res = await ApiClient.updateProduct(activeBizId, this.editingId, { name, type, sku, category, price, stock });
+            const res = await ApiClient.updateProduct(activeBizId, this.editingId, { name, type, sku, category, price, costPrice, stock });
             if (res.product) {
               const norm = Normalizer.product(res.product);
               const idx = products.findIndex(p => p.id === this.editingId);
@@ -1100,6 +1595,7 @@
               Modal.close('modal-product');
               this.renderList();
               InvoiceController.populateProductDropdowns();
+              if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
               return;
             }
           } catch (err) {
@@ -1108,7 +1604,7 @@
         }
         const index = products.findIndex(p => p.id === this.editingId);
         if (index !== -1) {
-          products[index] = { ...products[index], name, type, sku, category, price, stock };
+          products[index] = { ...products[index], name, type, sku, category, price, costPrice, stock };
           Store.saveProducts(products);
           Toast.show('Item updated successfully', 'success');
         }
@@ -1116,7 +1612,7 @@
         if (AuthController.isAuthenticated()) {
           const activeBizId = AuthController.getActiveBusinessId();
           try {
-            const res = await ApiClient.createProduct(activeBizId, { name, type, sku, category, price, stock });
+            const res = await ApiClient.createProduct(activeBizId, { name, type, sku, category, price, costPrice, stock });
             if (res.product) {
               const norm = Normalizer.product(res.product);
               products.push(norm);
@@ -1125,6 +1621,7 @@
               Modal.close('modal-product');
               this.renderList();
               InvoiceController.populateProductDropdowns();
+              if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
               return;
             }
           } catch (err) {
@@ -1138,6 +1635,7 @@
           sku,
           category,
           price,
+          costPrice,
           stock
         };
         products.push(newProduct);
@@ -1148,6 +1646,7 @@
       Modal.close('modal-product');
       this.renderList();
       InvoiceController.populateProductDropdowns();
+      if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
     },
     async delete(id) {
       const products = Store.getProducts();
@@ -2086,54 +2585,143 @@
         </div>
       `;
     },
-    async saveInvoice(isDraft = false) {
-      const data = this.collectFormData();
-      const settings = Store.getSettings();
+    validateInvoiceData(data) {
+      const mistakes = [];
+      const invalidFields = [];
 
-      if (!data.customerName) {
-        Toast.show('Please select or specify a customer', 'error');
-        document.getElementById('inv-customer-name')?.focus();
-        return;
+      // Clear all previous mistake highlights
+      document.querySelectorAll('.field-mistake').forEach(el => el.classList.remove('field-mistake'));
+
+      // 1. Customer Name Check
+      if (!data.customerName || !data.customerName.trim()) {
+        mistakes.push('Customer Name is missing. Please select an existing customer or type a name (कस्टमर का नाम दर्ज करें).');
+        const custNameEl = document.getElementById('inv-customer-name');
+        if (custNameEl) invalidFields.push(custNameEl);
       }
 
-      if (data.items.length === 0) {
-        Toast.show('Please add at least one line item with a name', 'error');
-        return;
+      // 2. Line Items Check
+      const rows = document.querySelectorAll('#line-items-tbody .line-item-row');
+      if (rows.length === 0 || data.items.length === 0) {
+        mistakes.push('No line items in invoice. Please click "＋ Add Item" to add products or services (बिल में कम से कम 1 आइटम जोड़ें).');
+      } else {
+        rows.forEach((row, idx) => {
+          const nameInput = row.querySelector('.line-item-name');
+          const qtyInput = row.querySelector('.line-item-qty');
+          const priceInput = row.querySelector('.line-item-price');
+
+          const name = nameInput ? nameInput.value.trim() : '';
+          const rawQty = qtyInput ? qtyInput.value.trim() : '';
+          const qty = parseFloat(rawQty);
+          const rawPrice = priceInput ? priceInput.value.trim() : '';
+          const price = parseFloat(rawPrice);
+
+          if (!name) {
+            mistakes.push(`Item #${idx + 1}: Name is empty. Please enter item name or pick a product from dropdown.`);
+            if (nameInput) invalidFields.push(nameInput);
+          }
+
+          if (!rawQty || isNaN(qty) || qty < 1) {
+            mistakes.push(`Item #${idx + 1} (${name || 'Item'}): Quantity is invalid (${rawQty || 'empty'}). Must be a positive number of at least 1 (मात्रा कम से कम 1 होनी चाहिए).`);
+            if (qtyInput) invalidFields.push(qtyInput);
+          }
+
+          if (rawPrice === '' || isNaN(price) || price < 0) {
+            mistakes.push(`Item #${idx + 1} (${name || 'Item'}): Price is invalid. Please enter a valid number.`);
+            if (priceInput) invalidFields.push(priceInput);
+          } else if (price === 0) {
+            mistakes.push(`Item #${idx + 1} (${name || 'Item'}): Price is ₹0.00. Please enter the correct selling price (कीमत ₹0 है, सही रेट डालें).`);
+            if (priceInput) invalidFields.push(priceInput);
+          }
+        });
       }
 
-      // Strict validation for positive integer quantities
-      const invalidQtyItem = data.items.find(it => isNaN(it.qty) || it.qty < 1 || !Number.isInteger(it.qty) || !it.isQtyValid);
-      if (invalidQtyItem) {
-        Toast.show('Quantity must be a positive whole number (minimum 1) for all items', 'error');
-        return;
+      // 3. Discount Check
+      if (data.discountAmount > data.subtotal && data.subtotal > 0) {
+        mistakes.push(`Discount (₹${data.discountAmount}) cannot exceed Subtotal (₹${data.subtotal}) (छूट कुल बिल से ज्यादा नहीं हो सकती).`);
+        const discInput = document.getElementById('inv-discount-value');
+        if (discInput) invalidFields.push(discInput);
       }
 
-      // Strict validation for custom tax
+      // 4. Custom Tax Check
       if (document.getElementById('inv-tax-rate').value === 'custom') {
         const rawTaxVal = parseFloat(document.getElementById('inv-custom-tax')?.value);
         if (isNaN(rawTaxVal) || rawTaxVal < 0 || rawTaxVal > 100) {
-          Toast.show('Custom tax rate must be between 0% and 100%', 'error');
-          document.getElementById('inv-custom-tax')?.focus();
-          return;
+          mistakes.push('Custom tax rate must be between 0% and 100% (टैक्स 0% से 100% के बीच होना चाहिए).');
+          const taxInput = document.getElementById('inv-custom-tax');
+          if (taxInput) invalidFields.push(taxInput);
         }
       }
 
-      if (data.grandTotal < 0) {
-        Toast.show('Grand total cannot be negative', 'error');
-        return;
+      // 5. Date Consistency Check
+      if (data.date && data.dueDate && data.dueDate < data.date) {
+        mistakes.push(`Due Date (${data.dueDate}) cannot be earlier than Invoice Date (${data.date}) (ड्यू डेट बिल की तारीख से पहले नहीं हो सकती).`);
+        const dueInput = document.getElementById('inv-due-date');
+        if (dueInput) invalidFields.push(dueInput);
       }
 
-      const invoices = Store.getInvoices();
+      // 6. Partial Payment Check
+      if (data.paymentStatus === 'Partial') {
+        const rawPaid = parseFloat(document.getElementById('inv-paid-amount')?.value);
+        if (isNaN(rawPaid) || rawPaid <= 0) {
+          mistakes.push('Partial payment status selected, but Paid Amount is ₹0.00. Please enter the amount paid (भुगतान की गई राशि दर्ज करें).');
+          const paidInput = document.getElementById('inv-paid-amount');
+          if (paidInput) invalidFields.push(paidInput);
+        } else if (rawPaid > data.grandTotal) {
+          mistakes.push(`Paid amount (₹${rawPaid}) exceeds Grand Total (₹${data.grandTotal}) (भुगतान राशि कुल बिल से ज्यादा नहीं हो सकती).`);
+          const paidInput = document.getElementById('inv-paid-amount');
+          if (paidInput) invalidFields.push(paidInput);
+        }
+      }
 
-      // Prevent duplicate invoice numbers
+      // 7. Duplicate Invoice Number Check
+      const invoices = Store.getInvoices();
       const duplicateInv = invoices.find(i =>
         i.invoiceNumber === data.invoiceNumber && i.id !== this.editingInvoiceId
       );
       if (duplicateInv) {
-        Toast.show(`Invoice number "${data.invoiceNumber}" already exists. Please use a unique number.`, 'error');
-        document.getElementById('inv-number')?.focus();
+        mistakes.push(`Invoice number "${data.invoiceNumber}" already exists. Please enter a unique invoice number.`);
+        const invNumInput = document.getElementById('inv-number');
+        if (invNumInput) invalidFields.push(invNumInput);
+      }
+
+      return {
+        isValid: mistakes.length === 0,
+        mistakes,
+        invalidFields
+      };
+    },
+    async saveInvoice(isDraft = false) {
+      const data = this.collectFormData();
+      const validation = this.validateInvoiceData(data);
+      const alertBox = document.getElementById('invoice-mistake-alert');
+      const alertList = document.getElementById('invoice-mistake-list');
+
+      if (!validation.isValid) {
+        // Highlight all mistaken fields
+        validation.invalidFields.forEach(field => {
+          if (field) field.classList.add('field-mistake');
+        });
+
+        // Focus on first invalid field
+        if (validation.invalidFields.length > 0 && validation.invalidFields[0]) {
+          validation.invalidFields[0].focus();
+        }
+
+        // Show mistake alert box with list of mistakes
+        if (alertList) {
+          alertList.innerHTML = `<ul style="margin:4px 0 0 16px;padding:0">${validation.mistakes.map(m => `<li style="margin-bottom:3px">${Utils.escapeHtml(m)}</li>`).join('')}</ul>`;
+        }
+        if (alertBox) {
+          alertBox.style.display = 'block';
+          alertBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        Toast.show('⚠️ Something is not good! Please fix the highlighted mistakes.', 'error');
         return;
       }
+
+      // Clear alert box on success
+      if (alertBox) alertBox.style.display = 'none';
 
       // If Customer is new (not in customer list), auto-save customer
       let customerId = data.customerId;
@@ -2179,6 +2767,7 @@
               await AuthController.syncFromCloud(activeBizId);
               this.resetForm();
               DashboardController.render();
+              if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
               Navigation.switchView('invoices');
               return;
             }
@@ -2189,6 +2778,7 @@
               await AuthController.syncFromCloud(activeBizId);
               this.resetForm();
               DashboardController.render();
+              if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
               Navigation.switchView('invoices');
               return;
             }
@@ -2270,6 +2860,7 @@
       // Cleanly reset edit state and redirect to invoices history
       this.resetForm();
       DashboardController.render();
+      if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
       Navigation.switchView('invoices');
     },
     shareWhatsApp() {
@@ -2477,6 +3068,7 @@
             await AuthController.syncFromCloud(activeBizId);
             this.render();
             DashboardController.render();
+            if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
             return;
           } catch (err) {
             console.warn('Cloud invoice deletion issue', err);
@@ -2502,6 +3094,7 @@
         Toast.show(`Invoice #${inv.invoiceNumber} deleted`, 'success');
         this.render();
         DashboardController.render();
+        if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
       }
     }
   };
@@ -2870,10 +3463,774 @@
     }
   };
 
+  // --- AI BILLING ASSISTANT CONTROLLER ---
+  const AiBillingController = {
+    initialized: false,
+    activeDraft: null,
+
+    init() {
+      if (this.initialized) return;
+      this.initialized = true;
+
+      const btnSubmit = document.getElementById('ai-btn-submit');
+      const inputPrompt = document.getElementById('ai-prompt-input');
+
+      if (btnSubmit) {
+        btnSubmit.addEventListener('click', () => this.handlePromptSubmit());
+      }
+
+      if (inputPrompt) {
+        inputPrompt.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            this.handlePromptSubmit();
+          }
+        });
+      }
+
+      // Quick Chips
+      document.querySelectorAll('.ai-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const query = chip.getAttribute('data-query');
+          if (inputPrompt) {
+            inputPrompt.value = query;
+            this.handlePromptSubmit();
+          }
+        });
+      });
+
+
+
+      // Draft Actions
+      const btnCancelDraft = document.getElementById('ai-btn-cancel-draft');
+      const btnDiscardBottom = document.getElementById('ai-btn-discard-bottom');
+      if (btnCancelDraft) btnCancelDraft.addEventListener('click', () => this.discardDraft());
+      if (btnDiscardBottom) btnDiscardBottom.addEventListener('click', () => this.discardDraft());
+
+      const btnEditManual = document.getElementById('ai-btn-edit-manual');
+      if (btnEditManual) btnEditManual.addEventListener('click', () => this.editInManualForm());
+
+      const btnConfirm = document.getElementById('ai-btn-confirm-invoice');
+      if (btnConfirm) btnConfirm.addEventListener('click', () => this.confirmDraft());
+
+      const selPayment = document.getElementById('ai-draft-payment-method');
+      if (selPayment) {
+        selPayment.addEventListener('change', (e) => {
+          if (this.activeDraft) {
+            this.activeDraft.paymentMethod = e.target.value;
+          }
+        });
+      }
+
+      const inputDiscount = document.getElementById('ai-draft-discount');
+      if (inputDiscount) {
+        inputDiscount.addEventListener('input', (e) => {
+          const disc = Math.max(0, parseFloat(e.target.value) || 0);
+          if (this.activeDraft) {
+            this.activeDraft.discountAmount = disc;
+            this.activeDraft.discountValue = disc;
+            this.recalculateDraft();
+          }
+        });
+      }
+    },
+
+    async handlePromptSubmit() {
+      const inputPrompt = document.getElementById('ai-prompt-input');
+      const prompt = (inputPrompt ? inputPrompt.value : '').trim();
+      if (!prompt) {
+        Toast.show('Please enter stationery items and rates sold', 'error');
+        return;
+      }
+
+      const inputCustName = document.getElementById('ai-cust-name-input');
+      const customerName = (inputCustName ? inputCustName.value : '').trim();
+
+      const inputCustPhone = document.getElementById('ai-cust-phone-input');
+      const customerPhone = (inputCustPhone ? inputCustPhone.value : '').trim();
+
+      const btnSubmit = document.getElementById('ai-btn-submit');
+      const textSpan = btnSubmit ? btnSubmit.querySelector('.btn-text') : null;
+      const spinnerSpan = btnSubmit ? btnSubmit.querySelector('.btn-spinner') : null;
+
+      if (btnSubmit) btnSubmit.disabled = true;
+      if (textSpan) textSpan.style.display = 'none';
+      if (spinnerSpan) spinnerSpan.style.display = 'inline';
+
+      // Hide previous results
+      const infoCard = document.getElementById('ai-info-card');
+      const ambCard = document.getElementById('ai-ambiguity-card');
+      const draftCard = document.getElementById('ai-draft-card');
+      if (infoCard) infoCard.style.display = 'none';
+      if (ambCard) ambCard.style.display = 'none';
+      if (draftCard) draftCard.style.display = 'none';
+
+      const activeBizId = AuthController.getActiveBusinessId() || 'default';
+
+      try {
+        let res;
+        if (AuthController.isAuthenticated()) {
+          res = await ApiClient.sendAiQuery(activeBizId, prompt, customerName, customerPhone);
+        } else {
+          res = this.localAiSimulation(prompt, customerName, customerPhone);
+        }
+
+        this.renderResponse(res, prompt);
+      } catch (err) {
+        console.error('AI Query Error:', err);
+        Toast.show('Failed to connect to AI Assistant', 'error');
+      } finally {
+        if (btnSubmit) btnSubmit.disabled = false;
+        if (textSpan) textSpan.style.display = 'inline';
+        if (spinnerSpan) spinnerSpan.style.display = 'none';
+      }
+    },
+
+    renderResponse(res, originalPrompt) {
+      if (!res || !res.intent) {
+        Toast.show(res?.error || 'No response from AI', 'error');
+        return;
+      }
+
+      // 1. Informational queries
+      if (['LOW_STOCK_QUERY', 'CUSTOMER_HISTORY_QUERY', 'PRODUCT_SEARCH_QUERY', 'UNKNOWN_OR_EMPTY'].includes(res.intent)) {
+        const infoCard = document.getElementById('ai-info-card');
+        const infoTitle = document.getElementById('ai-info-title');
+        const infoMsg = document.getElementById('ai-info-message');
+        const infoDetails = document.getElementById('ai-info-details');
+
+        if (infoTitle) {
+          infoTitle.textContent = res.intent === 'LOW_STOCK_QUERY' ? 'Low Stock Report'
+            : res.intent === 'CUSTOMER_HISTORY_QUERY' ? 'Customer Purchase History'
+            : res.intent === 'PRODUCT_SEARCH_QUERY' ? 'Product Catalog Search'
+            : 'AI Assistant';
+        }
+
+        if (infoMsg) infoMsg.textContent = res.reply || '';
+        if (infoDetails) infoDetails.innerHTML = '';
+
+        if (res.data && res.data.items && Array.isArray(res.data.items) && infoDetails) {
+          infoDetails.innerHTML = `
+            <div class="table-responsive" style="margin-top:10px">
+              <table class="ai-items-table">
+                <thead>
+                  <tr><th>Product / Book</th><th>SKU</th><th>Stock</th><th style="text-align:right">Price</th></tr>
+                </thead>
+                <tbody>
+                  ${res.data.items.map(p => `
+                    <tr>
+                      <td><strong>${Utils.escapeHtml(p.name)}</strong></td>
+                      <td><code>${Utils.escapeHtml(p.sku)}</code></td>
+                      <td><span class="status pending">${p.stock} left</span></td>
+                      <td style="text-align:right">₹${Number(p.price).toFixed(2)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } else if (res.data && res.data.matches && Array.isArray(res.data.matches) && infoDetails) {
+          infoDetails.innerHTML = `
+            <div class="table-responsive" style="margin-top:10px">
+              <table class="ai-items-table">
+                <thead>
+                  <tr><th>Product / Book</th><th>SKU</th><th>Available Stock</th><th style="text-align:right">Price</th></tr>
+                </thead>
+                <tbody>
+                  ${res.data.matches.map(p => `
+                    <tr>
+                      <td><strong>${Utils.escapeHtml(p.name)}</strong></td>
+                      <td><code>${Utils.escapeHtml(p.sku)}</code></td>
+                      <td>${p.stock} units</td>
+                      <td style="text-align:right">₹${Number(p.price).toFixed(2)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+        }
+
+        if (infoCard) infoCard.style.display = 'block';
+        return;
+      }
+
+      // 2. Ambiguity resolution
+      if (res.intent === 'AMBIGUITY_RESOLUTION') {
+        const ambCard = document.getElementById('ai-ambiguity-card');
+        const ambList = document.getElementById('ai-ambiguity-list');
+        if (ambList) ambList.innerHTML = '';
+
+        const options = res.data?.options || [];
+        options.forEach(opt => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'ai-ambiguity-btn';
+          btn.innerHTML = `
+            <span class="ai-ambiguity-title">${Utils.escapeHtml(opt.name)}</span>
+            <span class="ai-ambiguity-meta">Price: ₹${Number(opt.price).toFixed(2)} | Stock: ${opt.stock} units</span>
+          `;
+          btn.addEventListener('click', () => {
+            const promptInput = document.getElementById('ai-prompt-input');
+            if (promptInput) {
+              promptInput.value = `${opt.name} bill`;
+              this.handlePromptSubmit();
+            }
+          });
+          if (ambList) ambList.appendChild(btn);
+        });
+
+        if (ambCard) ambCard.style.display = 'block';
+        return;
+      }
+
+      // 3. Invoice Draft Created
+      if (res.intent === 'INVOICE_DRAFT_CREATED' && res.data?.draft) {
+        this.activeDraft = res.data.draft;
+        this.renderDraft(this.activeDraft);
+      }
+    },
+
+    renderDraft(draft) {
+      const draftCard = document.getElementById('ai-draft-card');
+      if (!draftCard) return;
+
+      // Customer
+      const custNameEl = document.getElementById('ai-draft-cust-name');
+      const custPhoneEl = document.getElementById('ai-draft-cust-phone');
+      const custStatusEl = document.getElementById('ai-draft-cust-status');
+
+      if (custNameEl) custNameEl.textContent = draft.customerName || 'Counter Customer';
+      if (custPhoneEl) custPhoneEl.textContent = draft.customerPhone || '— (Walk-in)';
+      if (custStatusEl) {
+        custStatusEl.innerHTML = draft.isNewCustomer
+          ? '<span class="status" style="background:#fef3c7;color:#92400e">New Customer</span>'
+          : '<span class="status" style="background:#ecfdf5;color:#047857">Existing Account</span>';
+      }
+
+      // Payment Method
+      const selPayment = document.getElementById('ai-draft-payment-method');
+      if (selPayment) selPayment.value = draft.paymentMethod || 'Cash';
+
+      // Discount
+      const inputDiscount = document.getElementById('ai-draft-discount');
+      if (inputDiscount) inputDiscount.value = draft.discountAmount || 0;
+
+      // Items Table
+      const tbody = document.getElementById('ai-draft-items-tbody');
+      if (tbody) {
+        tbody.innerHTML = (draft.items || []).map((it, idx) => {
+          const isCustom = !it.productId || it.sku === 'CUSTOM' || Number(it.price) === 0;
+          const priceDisplay = isCustom
+            ? `<input type="number" min="0" step="any" value="${Number(it.price) || 0}" style="width:90px;text-align:right;padding:4px 8px;border:1.5px solid #f59e0b;border-radius:4px;font-weight:700" oninput="window.updateAiDraftItem(${idx}, 'price', this.value)" placeholder="Set ₹">`
+            : `₹${Number(it.price).toFixed(2)}`;
+
+          const customTag = isCustom
+            ? `<span class="tag" style="background:#fef3c7;color:#92400e;font-size:10px;margin-left:6px">✎ Uncataloged</span>`
+            : '';
+
+          return `
+            <tr>
+              <td>
+                <strong>${Utils.escapeHtml(it.name)}</strong>${customTag}
+              </td>
+              <td><code>${Utils.escapeHtml(it.sku || '—')}</code></td>
+              <td style="text-align:center">
+                <input type="number" min="1" step="1" value="${it.qty}" style="width:60px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:4px;font-weight:700" oninput="window.updateAiDraftItem(${idx}, 'qty', this.value)">
+              </td>
+              <td style="text-align:right">${priceDisplay}</td>
+              <td style="text-align:right"><strong id="ai-draft-row-total-${idx}">₹${Number(it.total).toFixed(2)}</strong></td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      this.recalculateDraft();
+      draftCard.style.display = 'block';
+      draftCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    },
+
+    recalculateDraft() {
+      if (!this.activeDraft) return;
+
+      let subtotal = 0;
+      (this.activeDraft.items || []).forEach(it => {
+        subtotal += Number(it.total) || 0;
+      });
+
+      const disc = Math.min(subtotal, Math.max(0, parseFloat(this.activeDraft.discountAmount) || 0));
+      const taxRate = Number(this.activeDraft.taxRate) || 0;
+      const taxable = Math.max(0, subtotal - disc);
+      const taxAmount = Math.round((taxable * taxRate / 100) * 100) / 100;
+      const grandTotal = Math.max(0, Math.round((taxable + taxAmount) * 100) / 100);
+
+      this.activeDraft.subtotal = subtotal;
+      this.activeDraft.discountAmount = disc;
+      this.activeDraft.grandTotal = grandTotal;
+      this.activeDraft.taxAmount = taxAmount;
+
+      const subtotalEl = document.getElementById('ai-draft-subtotal');
+      const discEl = document.getElementById('ai-draft-discount-val');
+      const taxEl = document.getElementById('ai-draft-tax');
+      const grandEl = document.getElementById('ai-draft-grand-total');
+
+      if (subtotalEl) subtotalEl.textContent = `₹${subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      if (discEl) discEl.textContent = `-₹${disc.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      if (taxEl) taxEl.textContent = `₹${taxAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      if (grandEl) grandEl.textContent = `₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+    },
+
+    discardDraft() {
+      this.activeDraft = null;
+      const draftCard = document.getElementById('ai-draft-card');
+      if (draftCard) draftCard.style.display = 'none';
+      Toast.show('Draft discarded. No invoice was created.', 'default');
+    },
+
+    editInManualForm() {
+      if (!this.activeDraft) return;
+
+      const draft = this.activeDraft;
+      InvoiceController.resetForm();
+
+      const nameInput = document.getElementById('inv-customer-name');
+      const phoneInput = document.getElementById('inv-customer-phone');
+      const addressInput = document.getElementById('inv-customer-address');
+      const statusSelect = document.getElementById('inv-payment-status');
+      const methodSelect = document.getElementById('inv-payment-method');
+      const notesInput = document.getElementById('inv-notes');
+
+      if (nameInput) nameInput.value = draft.customerName || '';
+      if (phoneInput) phoneInput.value = draft.customerPhone || '';
+      if (addressInput) addressInput.value = draft.customerAddress || '';
+      if (statusSelect) statusSelect.value = 'Paid';
+      if (methodSelect) methodSelect.value = draft.paymentMethod || 'Cash';
+      if (notesInput) notesInput.value = draft.notes || '';
+
+      const tbody = document.getElementById('line-items-tbody');
+      if (tbody) {
+        tbody.innerHTML = '';
+        (draft.items || []).forEach(it => {
+          InvoiceController.addItemRow({
+            productId: it.productId,
+            name: it.name,
+            sku: it.sku,
+            qty: it.qty,
+            price: it.price
+          });
+        });
+      }
+
+      this.discardDraft();
+      Navigation.switchView('create-invoice');
+      Toast.show('Draft loaded into Detailed Invoice Form for review', 'success');
+    },
+
+    async confirmDraft() {
+      if (!this.activeDraft) return;
+
+      const draft = this.activeDraft;
+      const draftMistakes = [];
+
+      if (!draft.customerName || !draft.customerName.trim()) {
+        draftMistakes.push('Customer Name is required (कस्टमर का नाम आवश्यक है).');
+      }
+
+      if (!draft.items || draft.items.length === 0) {
+        draftMistakes.push('No items in draft. Please add sold stationery items (ड्राफ्ट में कम से कम 1 आइटम होना जरूरी है).');
+      } else {
+        draft.items.forEach((it, idx) => {
+          const p = parseFloat(it.price);
+          const q = parseInt(it.qty, 10);
+          if (isNaN(q) || q < 1) {
+            draftMistakes.push(`Item #${idx + 1} ("${it.name}"): Quantity is invalid (${it.qty}). Must be at least 1.`);
+          }
+          if (isNaN(p) || p < 0) {
+            draftMistakes.push(`Item #${idx + 1} ("${it.name}"): Price is invalid.`);
+          } else if (p === 0) {
+            draftMistakes.push(`Item #${idx + 1} ("${it.name}"): Price is ₹0.00. Please enter the rate in the price box above before confirming (रेट ₹0 है, सही कीमत डालें).`);
+          }
+        });
+      }
+
+      const alertBox = document.getElementById('ai-draft-mistake-alert');
+      const alertList = document.getElementById('ai-draft-mistake-list');
+
+      if (draftMistakes.length > 0) {
+        if (alertList) {
+          alertList.innerHTML = `<ul style="margin:4px 0 0 16px;padding:0">${draftMistakes.map(m => `<li style="margin-bottom:3px">${Utils.escapeHtml(m)}</li>`).join('')}</ul>`;
+        }
+        if (alertBox) {
+          alertBox.style.display = 'block';
+          alertBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        Toast.show('⚠️ Something is not good! Please fix the highlighted issues in the draft.', 'error');
+        return;
+      }
+
+      if (alertBox) alertBox.style.display = 'none';
+
+      const settings = Store.getSettings();
+      const activeBizId = AuthController.getActiveBusinessId() || 'default';
+      const btnConfirm = document.getElementById('ai-btn-confirm-invoice');
+
+      if (btnConfirm) {
+        btnConfirm.disabled = true;
+        btnConfirm.textContent = '⏳ Creating Invoice...';
+      }
+
+      const invoicePayload = {
+        customerId: draft.customerId || null,
+        customerName: draft.customerName || 'Counter Customer',
+        customerPhone: draft.customerPhone || '',
+        customerEmail: draft.customerEmail || '',
+        customerAddress: draft.customerAddress || '',
+        invoiceNumber: `${settings.invoicePrefix}${settings.nextNumber}`,
+        date: Utils.todayYMD(),
+        dueDate: Utils.addDays(Utils.todayYMD(), 7),
+        subtotal: draft.subtotal,
+        discountType: 'fixed',
+        discountValue: draft.discountAmount || 0,
+        discountAmount: draft.discountAmount || 0,
+        taxRate: draft.taxRate || 0,
+        taxAmount: draft.taxAmount || 0,
+        grandTotal: draft.grandTotal,
+        paymentMethod: draft.paymentMethod || 'Cash',
+        paymentStatus: 'Paid',
+        paidAmount: draft.grandTotal,
+        balanceDue: 0,
+        notes: draft.notes || 'AI Counter Bill',
+        items: (draft.items || []).map(it => ({
+          productId: it.productId,
+          name: it.name,
+          sku: it.sku || '',
+          qty: it.qty,
+          price: it.price,
+          total: it.total
+        }))
+      };
+
+      try {
+        if (AuthController.isAuthenticated()) {
+          const res = await ApiClient.createInvoice(activeBizId, invoicePayload);
+          if (res.invoice) {
+            const norm = Normalizer.invoice(res.invoice);
+            const invoices = Store.getInvoices();
+            invoices.unshift(norm);
+            Store.saveInvoices(invoices);
+
+            // Deduct stock in store
+            const products = Store.getProducts();
+            (draft.items || []).forEach(it => {
+              if (it.productId) {
+                const p = products.find(prod => prod.id === it.productId);
+                if (p && p.type === 'product') p.stock = Math.max(0, (p.stock || 0) - it.qty);
+              }
+            });
+            Store.saveProducts(products);
+
+            settings.nextNumber = (Number(settings.nextNumber) || 1001) + 1;
+            Store.saveSettings(settings);
+
+            Toast.show(`Invoice ${norm.invoiceNumber} created successfully!`, 'success');
+            document.getElementById('ai-draft-card').style.display = 'none';
+            this.activeDraft = null;
+
+            DashboardController.render();
+            if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
+
+            InvoicePreviewModal.open(norm);
+            return;
+          }
+        }
+
+        // Local Store Save
+        const newInvoice = {
+          ...invoicePayload,
+          id: Utils.generateId('inv_'),
+          createdAt: new Date().toISOString()
+        };
+
+        const invoices = Store.getInvoices();
+        invoices.unshift(newInvoice);
+        Store.saveInvoices(invoices);
+
+        // Deduct stock
+        const products = Store.getProducts();
+        (draft.items || []).forEach(it => {
+          if (it.productId) {
+            const p = products.find(prod => prod.id === it.productId);
+            if (p && p.type === 'product') p.stock = Math.max(0, (p.stock || 0) - it.qty);
+          }
+        });
+        Store.saveProducts(products);
+
+        settings.nextNumber = (Number(settings.nextNumber) || 1001) + 1;
+        Store.saveSettings(settings);
+
+        Toast.show(`Invoice ${newInvoice.invoiceNumber} created successfully!`, 'success');
+        document.getElementById('ai-draft-card').style.display = 'none';
+        this.activeDraft = null;
+
+        DashboardController.render();
+        if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
+
+        InvoicePreviewModal.open(newInvoice);
+
+      } catch (err) {
+        console.error('Invoice Creation Failed:', err);
+        Toast.show('Failed to save invoice', 'error');
+      } finally {
+        if (btnConfirm) {
+          btnConfirm.disabled = false;
+          btnConfirm.textContent = '✓ Confirm & Create Invoice →';
+        }
+      }
+    },
+
+    localAiSimulation(prompt, explicitCustName = '', explicitCustPhone = '') {
+      const products = Store.getProducts();
+      const customers = Store.getCustomers();
+      const lower = prompt.toLowerCase();
+
+      if (lower.includes('low stock') || lower.includes('kam stock') || lower.includes('कम स्टॉक')) {
+        const items = products.filter(p => p.type === 'product' && (p.stock || 0) <= 10);
+        return {
+          intent: 'LOW_STOCK_QUERY',
+          reply: `Found ${items.length} low stock product(s) in catalog.`,
+          data: { items }
+        };
+      }
+
+      // Quick Hindi/Devanagari Normalization
+      let text = prompt.trim();
+      let paymentMethod = 'Cash';
+      if (lower.includes('upi') || lower.includes('gpay') || lower.includes('paytm') || lower.includes('यूपीआई')) {
+        paymentMethod = 'UPI';
+      }
+
+      let customerName = explicitCustName || 'Counter Customer';
+      let customerPhone = explicitCustPhone || '';
+
+      const custMatch = text.match(/^([^\d,:;\(\)]+?)\s*(?:ko|se|ne|को|ने)/i);
+      if (custMatch && !explicitCustName) customerName = custMatch[1].trim();
+
+      const matchedCustomer = customers.find(c => 
+        c.name.toLowerCase().includes(customerName.toLowerCase()) ||
+        (customerPhone && c.phone && c.phone.includes(customerPhone))
+      ) || null;
+
+      if (matchedCustomer && !explicitCustName) customerName = matchedCustomer.name;
+      if (matchedCustomer && !customerPhone) customerPhone = matchedCustomer.phone || '';
+
+      // Extract items
+      let cleanText = text
+        .replace(/^.+?\b(?:ko|se|ne|को|ने)\b[:\s]*/i, '')
+        .replace(/(?:,\s*)?(?:cash|upi|online|नकद|यूपीआई)\.?$/i, '')
+        .replace(/(?:diye|diya|hai|दिए|दिया|दी)\.?$/i, '')
+        .trim();
+
+      const segments = cleanText.split(/\s*(?:,\s*|\baur\b|\band\b|\bऔर\b|\+|\n)\s*/i);
+      const items = [];
+
+      for (const seg of segments) {
+        let trimmed = seg.trim();
+        if (!trimmed) continue;
+
+        let qty = 1;
+        const leadingQty = trimmed.match(/^(\d+|दो|तीन|चार|पांच|२|३|५)\s*(?:x|\s*pcs)?\s+(.+)$/i);
+        if (leadingQty) {
+          const rawQ = leadingQty[1];
+          if (rawQ === 'दो' || rawQ === '२') qty = 2;
+          else if (rawQ === 'तीन' || rawQ === '३') qty = 3;
+          else if (rawQ === 'चार' || rawQ === '४') qty = 4;
+          else if (rawQ === 'पांच' || rawQ === '५') qty = 5;
+          else qty = parseInt(rawQ, 10) || 1;
+          trimmed = leadingQty[2].trim();
+        }
+
+        // Extract rate / price from segment e.g. "rs.100 per", "50 per", "70 me", "10 me", "@ 50", "75"
+        let specifiedPrice = null;
+        const pMatch = trimmed.match(/(?:@|rate|price|rs\.?|₹|रुपये|रुपए|रु|rupaye|rupiya|rupay|inr|\bin\b|\bme\b|\bmein\b|में)\s*(\d+(?:\.\d+)?)(?:\s*(?:per|each|\/pc|\/piece|\/unit|\/item|प्रति|प्रत्येक|ka|ki|ke|me|mein|रुपये|रुपए|रु))?/i) ||
+                       trimmed.match(/(\d+(?:\.\d+)?)\s*(?:rs|rupees|rupaye|rupiya|rupay|inr|रुपये|रुपए|रु|ka|ki|ke|me|mein|में|per|each|\/pc|\/piece|\/unit|\/item|प्रति|प्रत्येक)(?:\s*(?:per|each|\/pc|\/piece|\/unit|\/item|प्रति|प्रत्येक))?/i) ||
+                       trimmed.match(/(?:\s+)(\d+(?:\.\d+)?)$/i);
+        if (pMatch) {
+          specifiedPrice = parseFloat(pMatch[1]) || 0;
+          trimmed = trimmed.substring(0, pMatch.index).trim();
+        }
+
+        const cleanTerm = trimmed
+          .replace(/\b(rs|rupees|rupaye|rupiya|rupay|inr|me|mein|ka|ki|ke|rate|price|per|each|pc|pcs|piece|pieces|unit|units|item|items|प्रति|प्रत्येक)\b/gi, ' ')
+          .replace(/^[^\w\u0900-\u097F]+|[^\w\u0900-\u097F]+$/g, '')
+          .trim();
+
+        const tLower = cleanTerm.toLowerCase();
+        let foundProd = products.find(p => 
+          tLower.includes(p.name.toLowerCase()) || 
+          (p.name.toLowerCase().includes('math') && (tLower.includes('math') || tLower.includes('गणित'))) ||
+          (p.name.toLowerCase().includes('physic') && (tLower.includes('physic') || tLower.includes('भौतिक'))) ||
+          (p.name.toLowerCase().includes('register') && (tLower.includes('register') || tLower.includes('रजिस्टर'))) ||
+          (p.name.toLowerCase().includes('copy') && (tLower.includes('copy') || tLower.includes('कॉपी') || tLower.includes('notebook'))) ||
+          (p.name.toLowerCase().includes('notebook') && (tLower.includes('copy') || tLower.includes('कॉपी') || tLower.includes('notebook'))) ||
+          (p.name.toLowerCase().includes('pen') && (tLower.includes('pen') || tLower.includes('पेन')))
+        );
+
+        const price = specifiedPrice !== null ? specifiedPrice : (foundProd ? Number(foundProd.price) || 0 : 50);
+
+        if (foundProd) {
+          items.push({
+            productId: foundProd.id,
+            name: foundProd.name,
+            sku: foundProd.sku || '',
+            qty: qty,
+            price: price,
+            total: price * qty
+          });
+        } else {
+          const customName = (cleanTerm || trimmed).split(/\s+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') || 'Item';
+          items.push({
+            productId: null,
+            name: customName,
+            sku: 'CUSTOM',
+            qty: qty,
+            price: price,
+            total: price * qty
+          });
+        }
+      }
+
+      const subtotal = items.reduce((s, it) => s + it.total, 0);
+
+      return {
+        intent: 'INVOICE_DRAFT_CREATED',
+        reply: `Draft bill ready for ${customerName}: ${items.length} item(s) totalling ₹${subtotal.toLocaleString('en-IN')}. Please review and confirm below.`,
+        data: {
+          draft: {
+            customerId: matchedCustomer ? matchedCustomer.id : null,
+            customerName: matchedCustomer ? matchedCustomer.name : customerName,
+            customerPhone: customerPhone,
+            isNewCustomer: !matchedCustomer,
+            items: items,
+            subtotal,
+            discountAmount: 0,
+            taxRate: 0,
+            taxAmount: 0,
+            grandTotal: subtotal,
+            paymentMethod: paymentMethod,
+            notes: `AI Counter Bill generated from prompt: "${prompt}"`
+          }
+        }
+      };
+    }
+  };
+
+  window.updateAiDraftItem = function (idx, field, value) {
+    if (!AiBillingController.activeDraft || !AiBillingController.activeDraft.items || !AiBillingController.activeDraft.items[idx]) return;
+    const item = AiBillingController.activeDraft.items[idx];
+
+    if (field === 'qty') {
+      item.qty = Math.max(1, parseInt(value, 10) || 1);
+    } else if (field === 'price') {
+      item.price = Math.max(0, parseFloat(value) || 0);
+    }
+
+    item.total = Math.round(item.qty * item.price * 100) / 100;
+    const rowTotEl = document.getElementById(`ai-draft-row-total-${idx}`);
+    if (rowTotEl) rowTotEl.textContent = `₹${item.total.toFixed(2)}`;
+
+    AiBillingController.recalculateDraft();
+  };
+
+  const ThemeManager = {
+    init() {
+      const savedTheme = localStorage.getItem('billflow_theme') || 'light';
+      this.setTheme(savedTheme);
+
+      const btn = document.getElementById('btn-theme-toggle');
+      if (btn) {
+        btn.addEventListener('click', () => {
+          const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+          this.setTheme(isDark ? 'light' : 'dark');
+        });
+      }
+    },
+
+    setTheme(theme) {
+      const icon = document.getElementById('theme-icon');
+      const label = document.getElementById('theme-label');
+      if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('billflow_theme', 'dark');
+        if (icon) icon.textContent = '☀️';
+        if (label) label.textContent = 'Light';
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('billflow_theme', 'light');
+        if (icon) icon.textContent = '🌙';
+        if (label) label.textContent = 'Dark';
+      }
+    }
+  };
+
+  window.toggleSidebar = function (forceState) {
+    if (window.innerWidth <= 720) {
+      const sidebar = document.getElementById('sidebar');
+      if (sidebar) {
+        if (typeof forceState === 'boolean') {
+          if (forceState) sidebar.classList.add('open');
+          else sidebar.classList.remove('open');
+        } else {
+          sidebar.classList.toggle('open');
+        }
+      }
+      return;
+    }
+
+    if (typeof forceState === 'boolean') {
+      if (forceState) document.body.classList.add('sidebar-collapsed');
+      else document.body.classList.remove('sidebar-collapsed');
+    } else {
+      document.body.classList.toggle('sidebar-collapsed');
+    }
+
+    const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+    localStorage.setItem('billflow_sidebar_collapsed', isCollapsed ? 'true' : 'false');
+  };
+
+  window.toggleMenu = function () {
+    window.toggleSidebar();
+  };
+
+  window.toggleHowToUse = function (forceState) {
+    const box = document.getElementById('ai-guide-box');
+    const arrow = document.getElementById('how-to-use-arrow');
+    if (!box) return;
+
+    let show;
+    if (typeof forceState === 'boolean') {
+      show = forceState;
+    } else {
+      show = box.style.display === 'none' || !box.style.display;
+    }
+
+    box.style.display = show ? 'block' : 'none';
+    if (arrow) arrow.textContent = show ? '▲' : '▼';
+  };
+
   window.AuthController = AuthController;
+  window.AiBillingController = AiBillingController;
+  window.SalesAnalysisController = SalesAnalysisController;
+  window.ThemeManager = ThemeManager;
 
   // --- BOOTSTRAP APP ON DOM READY ---
   document.addEventListener('DOMContentLoaded', () => {
+    ThemeManager.init();
+
+    // Restore sidebar preference
+    if (localStorage.getItem('billflow_sidebar_collapsed') === 'true' && window.innerWidth > 720) {
+      document.body.classList.add('sidebar-collapsed');
+    }
+
     Navigation.init();
     AuthController.init();
     SettingsController.init();
@@ -2882,7 +4239,10 @@
     CustomerController.init();
     InvoiceController.init();
     InvoicesListController.init();
+    AiBillingController.init();
+    SalesAnalysisController.init();
     DashboardController.render();
+    SalesAnalysisController.render();
   });
 
 })();
