@@ -1932,6 +1932,16 @@ GSTIN: ${settings.gstin || 'Not configured'}
         fileInput.addEventListener('change', (e) => this.importBackup(e));
       }
 
+      const btnTestVoice = document.getElementById('btn-test-soundbox-voice');
+      if (btnTestVoice) {
+        btnTestVoice.addEventListener('click', () => {
+          if (typeof SoundboxAudio !== 'undefined') {
+            SoundboxAudio.speakInvoiceCreated();
+            Toast.show('📢 Playing Paytm Soundbox Chime & Female Voice...', 'default');
+          }
+        });
+      }
+
       const profileSelect = document.getElementById('settings-profile-select');
       if (profileSelect) {
         this.renderProfileDropdown();
@@ -5675,6 +5685,27 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
   const SoundboxAudio = {
     audioCtx: null,
     bannerTimeout: null,
+    cachedVoices: [],
+
+    init() {
+      this.preloadVoices();
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          this.preloadVoices();
+        };
+      }
+    },
+
+    preloadVoices() {
+      if ('speechSynthesis' in window) {
+        try {
+          const v = window.speechSynthesis.getVoices() || [];
+          if (v && v.length > 0) {
+            this.cachedVoices = v;
+          }
+        } catch (e) {}
+      }
+    },
 
     playChime() {
       try {
@@ -5714,6 +5745,73 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
       }
     },
 
+    getBestFemaleVoice() {
+      let voices = this.cachedVoices && this.cachedVoices.length > 0
+        ? this.cachedVoices
+        : (typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis.getVoices() : []);
+
+      if (!voices || voices.length === 0) return null;
+
+      // Strict male filter: Disqualify any voice belonging to a male speaker
+      const isMale = (name) => {
+        const lower = (name || '').toLowerCase();
+        if (lower.includes('female') || lower.includes('woman') || lower.includes('girl')) return false;
+        const maleNames = [
+          'david', 'mark', 'guy', 'ryan', 'ravi', 'hemant', 'prabhat', 'madhur',
+          'george', 'james', 'richard', 'michael', 'brian', 'john', 'steve',
+          'andrew', 'peter', 'alex', 'daniel', 'oliver', 'arthur', 'thomas',
+          'male', ' man', '(man)', 'boy'
+        ];
+        return maleNames.some(m => lower.includes(m));
+      };
+
+      const candidateVoices = voices.filter(v => !isMale(v.name));
+
+      // Tier 1: Indian English or Hindi Female Voices (Authentic Paytm soundbox tone)
+      // Microsoft Neerja, Swara, Heera, Kalpana, Veena, Lekha, Google हिन्दी
+      const tier1IndianFemale = candidateVoices.find(v => {
+        const n = (v.name || '').toLowerCase();
+        const l = (v.lang || '').toLowerCase();
+        return (
+          n.includes('neerja') || n.includes('swara') || n.includes('heera') ||
+          n.includes('kalpana') || n.includes('veena') || n.includes('lekha') ||
+          n.includes('हिन्दी') ||
+          (l.includes('in') && (n.includes('female') || n.includes('woman') || n.includes('girl') || n.includes('natural')))
+        );
+      });
+      if (tier1IndianFemale) return tier1IndianFemale;
+
+      // Tier 2: Specific Famous Natural Female Voices across Windows, Edge, Chrome, Safari
+      // Zira (Built-in on Windows 10/11), Jenny, Aria, Samantha, Victoria, Karen
+      const tier2FamousFemale = candidateVoices.find(v => {
+        const n = (v.name || '').toLowerCase();
+        return (
+          n.includes('zira') || n.includes('jenny') || n.includes('aria') ||
+          n.includes('samantha') || n.includes('victoria') || n.includes('karen') ||
+          n.includes('sonia') || n.includes('libby') || n.includes('natasha') ||
+          n.includes('ava') || n.includes('emma') || n.includes('michelle') ||
+          n.includes('google uk english female') || n.includes('google us english female')
+        );
+      });
+      if (tier2FamousFemale) return tier2FamousFemale;
+
+      // Tier 3: Any voice explicitly tagged female / woman
+      const tier3FemaleTag = candidateVoices.find(v => {
+        const n = (v.name || '').toLowerCase();
+        return n.includes('female') || n.includes('woman') || n.includes('girl');
+      });
+      if (tier3FemaleTag) return tier3FemaleTag;
+
+      // Tier 4: English voice that passed the non-male filter
+      const tier4English = candidateVoices.find(v => (v.lang || '').toLowerCase().startsWith('en'));
+      if (tier4English) return tier4English;
+
+      // Tier 5: First non-male candidate
+      if (candidateVoices.length > 0) return candidateVoices[0];
+
+      return null;
+    },
+
     speakInvoiceCreated(customMessage) {
       // 1. Play melodic Paytm Soundbox chime
       this.playChime();
@@ -5721,42 +5819,54 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
       // 2. Play female voice announcement
       const text = customMessage || 'Invoice has been created!';
 
-      if ('speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined') {
+      const executeSpeak = () => {
+        if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return;
+
         try {
-          window.speechSynthesis.cancel(); // cancel any active speech
+          window.speechSynthesis.cancel(); // Cancel any lingering speech
 
           const utter = new SpeechSynthesisUtterance(text);
           utter.rate = 1.0;
-          utter.pitch = 1.25; // Sweet, polite female tone like Paytm soundbox
           utter.volume = 1.0;
 
-          // Find best Indian / English female voice
-          const voices = window.speechSynthesis.getVoices() || [];
-          const femaleVoice = voices.find(v =>
-            (v.lang.includes('IN') && (v.name.includes('Female') || v.name.includes('Neerja') || v.name.includes('Swara') || v.name.includes('Heera'))) ||
-            v.name.includes('Female') ||
-            v.name.includes('Google UK English Female') ||
-            v.name.includes('Google US English Female') ||
-            v.name.includes('Zira') ||
-            v.name.includes('Samantha') ||
-            (v.lang.startsWith('en') && v.name.includes('Natural'))
-          );
-
+          const femaleVoice = this.getBestFemaleVoice();
           if (femaleVoice) {
             utter.voice = femaleVoice;
+            utter.lang = femaleVoice.lang || 'en-US';
+            utter.pitch = 1.15;
           } else {
-            utter.lang = 'en-IN';
+            utter.lang = 'en-US';
+            utter.pitch = 1.35; // Fallback female pitch boost if browser provides zero voice info
           }
 
-          // Delay speech slightly (160ms) so chime tone rings nicely first
-          setTimeout(() => {
-            try {
-              window.speechSynthesis.speak(utter);
-            } catch (e) {}
-          }, 160);
+          window.speechSynthesis.speak(utter);
         } catch (e) {
           console.warn('Speech synthesis notice', e);
         }
+      };
+
+      // Ensure voices are available
+      const currentVoices = (this.cachedVoices && this.cachedVoices.length > 0)
+        ? this.cachedVoices
+        : (window.speechSynthesis ? window.speechSynthesis.getVoices() : []);
+
+      if (currentVoices && currentVoices.length > 0) {
+        this.cachedVoices = currentVoices;
+        setTimeout(executeSpeak, 180);
+      } else {
+        this.preloadVoices();
+        let executed = false;
+        const onVoicesReady = () => {
+          if (!executed) {
+            executed = true;
+            this.preloadVoices();
+            setTimeout(executeSpeak, 100);
+          }
+        };
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.onvoiceschanged = onVoicesReady;
+        }
+        setTimeout(onVoicesReady, 350);
       }
 
       // 3. Display glowing visual Paytm Soundbox banner for 3 seconds
@@ -5783,6 +5893,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
           <small>Paytm Soundbox Alert</small>
           <strong>"${text}"</strong>
         </div>
+        <button type="button" onclick="window.SoundboxAudio.speakInvoiceCreated()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:8px" title="Replay voice">🔊 Replay</button>
       `;
 
       banner.classList.add('show');
@@ -5901,6 +6012,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
   function bootApp() {
     ThemeManager.init();
     FinanceParticles.init();
+    SoundboxAudio.init();
 
     // On desktop / laptop, restore saved sidebar collapsed state if previously toggled
     if (window.innerWidth > 768) {
