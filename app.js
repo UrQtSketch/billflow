@@ -3361,9 +3361,18 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
       if (btnCancel) btnCancel.style.display = 'none';
 
       const settings = Store.getSettings();
+      const invoices = Store.getInvoices();
+
+      // Ensure next sequence number does not collide with existing invoices
+      let nextNum = parseInt(settings.nextNumber, 10) || 1000;
+      while (invoices.some(i => i.invoiceNumber === `${settings.invoicePrefix || 'INV-'}${nextNum}`)) {
+        nextNum++;
+      }
+      settings.nextNumber = nextNum;
+      Store.saveSettings(settings);
 
       const invNumInput = document.getElementById('inv-number');
-      if (invNumInput) invNumInput.value = `${settings.invoicePrefix}${settings.nextNumber}`;
+      if (invNumInput) invNumInput.value = `${settings.invoicePrefix || 'INV-'}${nextNum}`;
 
       const dateInput = document.getElementById('inv-date');
       if (dateInput) dateInput.value = Utils.todayYMD();
@@ -3519,13 +3528,13 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
         const name = nameInput ? nameInput.value.trim() : '';
         const sku = skuInput ? skuInput.value.trim() : '';
         
-        // Strict positive quantity check
+        // Positive quantity check
         const rawQty = qtyInput ? qtyInput.value.trim() : '';
         const parsedQty = parseFloat(rawQty);
         let qty = 1;
         let isQtyValid = true;
 
-        if (!rawQty || isNaN(parsedQty) || parsedQty < 1 || !Number.isInteger(parsedQty)) {
+        if (!rawQty || isNaN(parsedQty) || parsedQty <= 0) {
           isQtyValid = false;
           qty = isNaN(parsedQty) ? 0 : parsedQty;
           if (qtyInput) qtyInput.style.borderColor = '#ef4444';
@@ -3535,8 +3544,9 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
         }
 
         const price = Math.max(0, parseFloat(priceInput?.value) || 0);
-        const total = isQtyValid && qty >= 1 ? qty * price : 0;
-        const productId = prodSelect?.value !== 'custom' ? prodSelect?.value : null;
+        const total = isQtyValid && qty > 0 ? Math.round(qty * price * 100) / 100 : 0;
+        const prodVal = prodSelect?.value;
+        const productId = (prodVal && prodVal !== 'custom') ? prodVal : null;
 
         if (name) {
           items.push({
@@ -3785,9 +3795,10 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
 
       // 2. Line Items Check
       const rows = document.querySelectorAll('#line-items-tbody .line-item-row');
-      if (rows.length === 0 || data.items.length === 0) {
+      if (rows.length === 0) {
         mistakes.push('No line items in invoice. Please click "＋ Add Item" to add products or services (बिल में कम से कम 1 आइटम जोड़ें).');
       } else {
+        let hasValidItem = false;
         rows.forEach((row, idx) => {
           const nameInput = row.querySelector('.line-item-name');
           const qtyInput = row.querySelector('.line-item-qty');
@@ -3804,8 +3815,8 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
             if (nameInput) invalidFields.push(nameInput);
           }
 
-          if (!rawQty || isNaN(qty) || qty < 1) {
-            mistakes.push(`Item #${idx + 1} (${name || 'Item'}): Quantity is invalid (${rawQty || 'empty'}). Must be a positive number of at least 1 (मात्रा कम से कम 1 होनी चाहिए).`);
+          if (!rawQty || isNaN(qty) || qty <= 0) {
+            mistakes.push(`Item #${idx + 1} (${name || 'Item'}): Quantity is invalid. Must be a positive number (मात्रा सही डालें).`);
             if (qtyInput) invalidFields.push(qtyInput);
           }
 
@@ -3813,10 +3824,18 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
             mistakes.push(`Item #${idx + 1} (${name || 'Item'}): Price is invalid. Please enter a valid number.`);
             if (priceInput) invalidFields.push(priceInput);
           } else if (price === 0) {
-            mistakes.push(`Item #${idx + 1} (${name || 'Item'}): Price is ₹0.00. Please enter the correct selling price (कीमत ₹0 है, सही रेट डालें).`);
+            mistakes.push(`Item #${idx + 1} (${name || 'Item'}): Price is ₹0.00. Please enter the correct selling price (रेट डालें).`);
             if (priceInput) invalidFields.push(priceInput);
           }
+
+          if (name && qty > 0 && price > 0) {
+            hasValidItem = true;
+          }
         });
+
+        if (!hasValidItem && mistakes.length === 0) {
+          mistakes.push('Please ensure at least one valid line item is added with a name, quantity, and price.');
+        }
       }
 
       // 3. Discount Check
@@ -3875,6 +3894,12 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
       };
     },
     async saveInvoice(isDraft = false) {
+      const invoices = Store.getInvoices();
+      const settings = Store.getSettings();
+      const btnSave = document.getElementById('btn-save-invoice');
+      const btnDraft = document.getElementById('btn-save-draft');
+      const originalSaveText = btnSave ? btnSave.innerHTML : 'Generate Invoice →';
+
       const data = this.collectFormData();
       const validation = this.validateInvoiceData(data);
       const alertBox = document.getElementById('invoice-mistake-alert');
@@ -3907,147 +3932,176 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
       // Clear alert box on success
       if (alertBox) alertBox.style.display = 'none';
 
-      // If Customer is new (not in customer list), auto-save customer
-      let customerId = data.customerId;
-      if (!customerId) {
-        const customers = Store.getCustomers();
-        const existing = customers.find(c => c.name.toLowerCase() === data.customerName.toLowerCase());
-        if (existing) {
-          customerId = existing.id;
-        } else {
-          const newCust = {
-            id: Utils.generateId('cust_'),
-            name: data.customerName,
-            phone: data.customerPhone || 'N/A',
-            email: '',
-            address: data.customerAddress || '',
-            createdAt: Utils.todayYMD()
-          };
-          customers.push(newCust);
-          Store.saveCustomers(customers);
-          customerId = newCust.id;
-
-          if (AuthController.isAuthenticated()) {
-            const activeBizId = AuthController.getActiveBusinessId();
-            ApiClient.createCustomer(activeBizId, newCust).catch(() => {});
-          }
-        }
+      // Set button loading state
+      if (btnSave) {
+        btnSave.disabled = true;
+        btnSave.innerHTML = `<span class="spinner" style="display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 0.6s linear infinite;margin-right:6px;vertical-align:middle"></span> Saving...`;
       }
+      if (btnDraft) btnDraft.disabled = true;
 
-      // If authenticated, persist to cloud
-      if (AuthController.isAuthenticated()) {
-        const activeBizId = AuthController.getActiveBusinessId();
-        try {
-          const payload = {
-            ...data,
-            customerId,
-            paymentStatus: isDraft ? 'Draft' : data.paymentStatus
-          };
-
-          if (this.editingInvoiceId) {
-            const res = await ApiClient.updateInvoice(activeBizId, this.editingInvoiceId, payload);
-            if (res.invoice) {
-              Toast.show(`Invoice #${res.invoice.invoice_number || data.invoiceNumber} updated successfully!`, 'success');
-              await AuthController.syncFromCloud(activeBizId);
-              this.resetForm();
-              DashboardController.render();
-              if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
-              Navigation.switchView('invoices');
-              return;
-            }
+      try {
+        // If Customer is new (not in customer list), auto-save customer
+        let customerId = data.customerId;
+        if (!customerId) {
+          const customers = Store.getCustomers();
+          const existing = customers.find(c => c.name.toLowerCase() === data.customerName.toLowerCase());
+          if (existing) {
+            customerId = existing.id;
           } else {
-            const res = await ApiClient.createInvoice(activeBizId, payload);
-            if (res.invoice) {
-              Toast.show(`Invoice #${res.invoice.invoice_number || data.invoiceNumber} generated successfully!`, 'success');
-              if (typeof SoundboxAudio !== 'undefined') SoundboxAudio.speakInvoiceCreated();
-              await AuthController.syncFromCloud(activeBizId);
-              this.resetForm();
-              DashboardController.render();
-              if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
-              Navigation.switchView('invoices');
-              return;
+            const newCust = {
+              id: Utils.generateId('cust_'),
+              name: data.customerName,
+              phone: data.customerPhone || 'N/A',
+              email: '',
+              address: data.customerAddress || '',
+              createdAt: Utils.todayYMD()
+            };
+            customers.push(newCust);
+            Store.saveCustomers(customers);
+            customerId = newCust.id;
+
+            if (AuthController.isAuthenticated()) {
+              const activeBizId = AuthController.getActiveBusinessId();
+              ApiClient.createCustomer(activeBizId, newCust).catch(() => {});
             }
           }
-        } catch (err) {
-          console.warn('Cloud invoice save issue, falling back to local store', err);
         }
-      }
 
-      // Stock adjustment logic (Local fallback / Demo mode)
-      if (!isDraft) {
-        const products = Store.getProducts();
+        // If authenticated, persist to cloud
+        let cloudSaved = false;
+        if (AuthController.isAuthenticated()) {
+          const activeBizId = AuthController.getActiveBusinessId();
+          try {
+            const payload = {
+              ...data,
+              customerId,
+              paymentStatus: isDraft ? 'Draft' : data.paymentStatus
+            };
 
-        if (this.editingInvoiceId && this.originalInvoiceSnapshot) {
-          (this.originalInvoiceSnapshot.items || []).forEach(oldIt => {
-            if (oldIt.productId) {
-              const prod = products.find(p => p.id === oldIt.productId);
-              if (prod && prod.type === 'product') {
-                prod.stock = (prod.stock || 0) + (oldIt.qty || 0);
+            if (this.editingInvoiceId) {
+              const res = await ApiClient.updateInvoice(activeBizId, this.editingInvoiceId, payload);
+              if (res && res.invoice) {
+                Toast.show(`Invoice #${res.invoice.invoice_number || data.invoiceNumber} updated successfully!`, 'success');
+                await AuthController.syncFromCloud(activeBizId);
+                this.resetForm();
+                DashboardController.render();
+                if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
+                Navigation.switchView('invoices');
+                cloudSaved = true;
+                return;
+              } else if (res && res.error) {
+                Toast.show(res.error, 'error');
+                return;
+              }
+            } else {
+              const res = await ApiClient.createInvoice(activeBizId, payload);
+              if (res && res.invoice) {
+                Toast.show(`Invoice #${res.invoice.invoice_number || data.invoiceNumber} generated successfully!`, 'success');
+                if (typeof SoundboxAudio !== 'undefined') SoundboxAudio.speakInvoiceCreated();
+                await AuthController.syncFromCloud(activeBizId);
+                this.resetForm();
+                DashboardController.render();
+                if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
+                Navigation.switchView('invoices');
+                cloudSaved = true;
+                return;
+              } else if (res && res.error) {
+                Toast.show(res.error, 'error');
+                return;
               }
             }
-          });
+          } catch (err) {
+            console.warn('Cloud invoice save issue, falling back to local store', err);
+          }
+        }
 
-          data.items.forEach(newIt => {
-            if (newIt.productId) {
-              const prod = products.find(p => p.id === newIt.productId);
-              if (prod && prod.type === 'product') {
-                prod.stock = Math.max(0, (prod.stock || 0) - (newIt.qty || 0));
+        if (cloudSaved) return;
+
+        // Stock adjustment logic (Local fallback / Demo mode)
+        if (!isDraft) {
+          const products = Store.getProducts();
+
+          if (this.editingInvoiceId && this.originalInvoiceSnapshot) {
+            (this.originalInvoiceSnapshot.items || []).forEach(oldIt => {
+              if (oldIt.productId) {
+                const prod = products.find(p => p.id === oldIt.productId);
+                if (prod && prod.type === 'product') {
+                  prod.stock = (prod.stock || 0) + (oldIt.qty || 0);
+                }
               }
-            }
-          });
+            });
+
+            data.items.forEach(newIt => {
+              if (newIt.productId) {
+                const prod = products.find(p => p.id === newIt.productId);
+                if (prod && prod.type === 'product') {
+                  prod.stock = Math.max(0, (prod.stock || 0) - (newIt.qty || 0));
+                }
+              }
+            });
+          } else {
+            data.items.forEach(it => {
+              if (it.productId) {
+                const prod = products.find(p => p.id === it.productId);
+                if (prod && prod.type === 'product') {
+                  prod.stock = Math.max(0, (prod.stock || 0) - it.qty);
+                }
+              }
+            });
+          }
+          Store.saveProducts(products);
+        }
+
+        if (this.editingInvoiceId) {
+          const idx = invoices.findIndex(i => i.id === this.editingInvoiceId);
+          if (idx !== -1) {
+            const updatedInvoice = {
+              ...data,
+              id: this.editingInvoiceId,
+              invoiceNumber: this.originalInvoiceSnapshot ? this.originalInvoiceSnapshot.invoiceNumber : data.invoiceNumber,
+              customerId,
+              paymentStatus: isDraft ? 'Draft' : data.paymentStatus,
+              createdAt: this.originalInvoiceSnapshot ? this.originalInvoiceSnapshot.createdAt : new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+            invoices[idx] = updatedInvoice;
+            Store.saveInvoices(invoices);
+            Toast.show(`Invoice #${updatedInvoice.invoiceNumber} updated successfully!`, 'success');
+          }
         } else {
-          data.items.forEach(it => {
-            if (it.productId) {
-              const prod = products.find(p => p.id === it.productId);
-              if (prod && prod.type === 'product') {
-                prod.stock = Math.max(0, (prod.stock || 0) - it.qty);
-              }
-            }
-          });
-        }
-        Store.saveProducts(products);
-      }
-
-      if (this.editingInvoiceId) {
-        const idx = invoices.findIndex(i => i.id === this.editingInvoiceId);
-        if (idx !== -1) {
-          const updatedInvoice = {
+          const newInvoice = {
             ...data,
-            id: this.editingInvoiceId,
-            invoiceNumber: this.originalInvoiceSnapshot ? this.originalInvoiceSnapshot.invoiceNumber : data.invoiceNumber,
+            id: Utils.generateId('inv_'),
             customerId,
             paymentStatus: isDraft ? 'Draft' : data.paymentStatus,
-            createdAt: this.originalInvoiceSnapshot ? this.originalInvoiceSnapshot.createdAt : new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            createdAt: new Date().toISOString()
           };
-          invoices[idx] = updatedInvoice;
+          invoices.unshift(newInvoice);
           Store.saveInvoices(invoices);
-          Toast.show(`Invoice #${updatedInvoice.invoiceNumber} updated successfully!`, 'success');
+
+          // Advance invoice sequence number in settings
+          settings.nextNumber = (parseInt(settings.nextNumber, 10) || 1000) + 1;
+          Store.saveSettings(settings);
+
+          Toast.show(`Invoice #${data.invoiceNumber} generated successfully!`, 'success');
+          if (typeof SoundboxAudio !== 'undefined') SoundboxAudio.speakInvoiceCreated();
         }
-      } else {
-        const newInvoice = {
-          ...data,
-          id: Utils.generateId('inv_'),
-          customerId,
-          paymentStatus: isDraft ? 'Draft' : data.paymentStatus,
-          createdAt: new Date().toISOString()
-        };
-        invoices.push(newInvoice);
-        Store.saveInvoices(invoices);
 
-        // Advance invoice sequence number in settings
-        settings.nextNumber = (parseInt(settings.nextNumber, 10) || 1000) + 1;
-        Store.saveSettings(settings);
-
-        Toast.show(`Invoice #${data.invoiceNumber} generated successfully!`, 'success');
-        if (typeof SoundboxAudio !== 'undefined') SoundboxAudio.speakInvoiceCreated();
+        // Cleanly reset edit state and redirect to invoices history
+        this.resetForm();
+        DashboardController.render();
+        if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
+        Navigation.switchView('invoices');
+      } catch (saveErr) {
+        console.error('Invoice save error:', saveErr);
+        Toast.show(`Could not generate invoice: ${saveErr.message || 'Unknown error'}`, 'error');
+      } finally {
+        if (btnSave) {
+          btnSave.disabled = false;
+          btnSave.innerHTML = originalSaveText;
+        }
+        if (btnDraft) btnDraft.disabled = false;
       }
-
-      // Cleanly reset edit state and redirect to invoices history
-      this.resetForm();
-      DashboardController.render();
-      if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
-      Navigation.switchView('invoices');
     },
     shareWhatsApp() {
       const data = this.collectFormData();
@@ -5126,7 +5180,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
             DashboardController.render();
             if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
 
-            InvoicePreviewModal.open(norm);
+            InvoicesListController.view(norm.id);
             return;
           }
         }
@@ -5163,7 +5217,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
         DashboardController.render();
         if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
 
-        InvoicePreviewModal.open(newInvoice);
+        InvoicesListController.view(newInvoice.id);
 
       } catch (err) {
         console.error('Invoice Creation Failed:', err);
@@ -5667,7 +5721,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
       // 2. Play female voice announcement
       const text = customMessage || 'Invoice has been created!';
 
-      if ('speechSynthesis' in window) {
+      if ('speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined') {
         try {
           window.speechSynthesis.cancel(); // cancel any active speech
 
@@ -5841,6 +5895,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
   window.UdhaarKhataController = UdhaarKhataController;
   window.LowStockController = LowStockController;
   window.GstReportController = GstReportController;
+  window.InvoicePreviewModal = { open(inv) { if (inv && inv.id) InvoicesListController.view(inv.id); } };
 
   // --- BOOTSTRAP APP ON DOM READY ---
   function bootApp() {
