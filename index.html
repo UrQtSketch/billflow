@@ -114,7 +114,6 @@
       <nav class="nav">
         <button class="active" data-view="dashboard">▦ <span>Dashboard</span></button>
         <button data-view="create-invoice">＋ <span>Create Invoice</span></button>
-        <button data-view="voice-billing" class="nav-voice-btn" id="nav-btn-voice-billing">🎙️ <span>Voice Billing</span> <span class="ai-nav-badge" style="background:linear-gradient(135deg, #8b5cf6, #ec4899)">MIC</span></button>
         <button data-view="ai-billing" class="nav-ai-btn">✦ <span>AI Billing</span> <span class="ai-nav-badge">FAST</span></button>
         <button data-view="sales-analysis" class="nav-analysis-btn">📈 <span>Sales Analysis</span> <span class="ai-nav-badge" style="background:#10b981">PROFIT</span></button>
         <button data-view="invoices">▤ <span>Invoices</span><small id="nav-invoices-badge">3</small></button>
@@ -472,10 +471,6 @@
               <label for="ai-prompt-input" class="ai-input-label">STATIONERY & BOOKS SOLD (ENTER ITEMS & RATES)</label>
               <div class="ai-input-group">
                 <textarea id="ai-prompt-input" rows="2" placeholder='e.g. "2 register 70 me, 5 pen 10 me, 1 practical file 50 me"'></textarea>
-                <button type="button" class="btn btn-ai-mic" id="ai-btn-mic-prompt" title="Speak to type (बोलकर लिखें)" style="background:#ede9fe;color:#7c3aed;border:1.5px solid #c4b5fd;font-weight:700;display:inline-flex;align-items:center;gap:4px">
-                  <span id="ai-mic-icon">🎙️</span>
-                  <span>Speak</span>
-                </button>
                 <button type="button" class="btn primary ai-submit-btn" id="ai-btn-submit">
                   <span class="btn-text">⚡ Generate Bill</span>
                   <span class="btn-spinner" style="display:none">⏳ Processing...</span>
@@ -704,203 +699,6 @@
           </div>
         </div>
       </div>
-
-      <!-- VIEW 2.8: VOICE BILLING COUNTER (माइक से बोलकर बिल बनाएं) -->
-      <div class="view" id="view-voice-billing">
-        <div class="voice-billing-container">
-          <!-- Voice Counter Hero Card -->
-          <section class="card panel voice-hero-card">
-            <div class="voice-hero-header">
-              <div class="voice-hero-badge">🎙️ FAST VOICE COUNTER / बोलकर बिल बनाएं</div>
-              <h2>Speak & Generate Instant Invoice</h2>
-              <p class="muted">Counter par fast billing ke liye bas boliye: <em>"5 register rs.100 per, 5 copy 50 me, cash"</em> — AI turant calculate karke bill bana dega!</p>
-            </div>
-
-            <!-- Language & Audio Control Bar -->
-            <div class="voice-lang-bar">
-              <span style="font-size:12px;font-weight:700;color:var(--ink)">Language / भाषा:</span>
-              <div class="voice-lang-options">
-                <button type="button" class="voice-lang-btn active" id="voice-lang-hi" data-lang="hi-IN">🇮🇳 Hindi (हिंदी)</button>
-                <button type="button" class="voice-lang-btn" id="voice-lang-en" data-lang="en-IN">🇮🇳 Hinglish / English</button>
-              </div>
-            </div>
-
-            <!-- Big Animated Interactive Mic Counter -->
-            <div class="voice-mic-stage">
-              <div class="voice-mic-ripple" id="voice-mic-ripple"></div>
-              <button type="button" class="btn-voice-mic" id="btn-voice-mic-main" title="Click to Speak / बोलने के लिए क्लिक करें">
-                <span class="mic-icon" id="voice-mic-icon">🎙️</span>
-                <span class="mic-pulse-ring"></span>
-              </button>
-
-              <div class="voice-status-text" id="voice-status-label">Tap Microphone to Speak / 20 सेकंड तक आराम से बोलें</div>
-
-              <!-- 20-Second Recording Countdown Badge & Progress Bar -->
-              <div id="voice-countdown-box" style="display:none;margin-top:10px;width:100%;max-width:360px">
-                <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:#ef4444;margin-bottom:4px">
-                  <span id="voice-timer-text">⏱️ 20s remaining... (बोलते रहें)</span>
-                  <button type="button" class="btn btn-sm" id="btn-voice-stop-early" style="background:#ef4444;color:#fff;border:none;padding:2px 8px;font-size:11px;border-radius:12px">⏹️ Done (Stop)</button>
-                </div>
-                <div style="width:100%;height:6px;background:rgba(239,68,68,0.2);border-radius:3px;overflow:hidden">
-                  <div id="voice-timer-progress-bar" style="width:100%;height:100%;background:#ef4444;transition:width 1s linear"></div>
-                </div>
-              </div>
-
-              <!-- Animated Sound Wave Bars (shown while listening) -->
-              <div class="voice-wave-bars" id="voice-wave-bars" style="display:none">
-                <span class="wave-bar"></span>
-                <span class="wave-bar"></span>
-                <span class="wave-bar"></span>
-                <span class="wave-bar"></span>
-                <span class="wave-bar"></span>
-                <span class="wave-bar"></span>
-                <span class="wave-bar"></span>
-              </div>
-            </div>
-
-            <!-- Customer Name & Phone Fields -->
-            <div class="voice-customer-grid">
-              <div class="field" style="margin-bottom:0">
-                <label for="voice-cust-name-input">CUSTOMER NAME / ग्राहक का नाम (OPTIONAL)</label>
-                <input type="text" id="voice-cust-name-input" placeholder="e.g. Rahul Sharma, Walk-in Customer">
-              </div>
-              <div class="field" style="margin-bottom:0">
-                <label for="voice-cust-phone-input">PHONE NUMBER / फोन नंबर (OPTIONAL)</label>
-                <input type="text" id="voice-cust-phone-input" placeholder="e.g. +91 98765 43210">
-              </div>
-            </div>
-
-            <!-- Real-time Live Speech Transcript Box -->
-            <div class="voice-transcript-wrapper">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                <label class="voice-input-label">LIVE SPOKEN TRANSCRIPT / आवाज़ से लिखा गया प्रॉम्प्ट</label>
-                <div style="display:flex;gap:6px">
-                  <button type="button" class="btn btn-sm" id="btn-voice-clear" style="font-size:11px;padding:3px 8px">✕ Clear</button>
-                  <button type="button" class="btn btn-sm primary" id="btn-voice-generate-manual" style="font-size:11px;padding:3px 10px">⚡ Generate Bill</button>
-                </div>
-              </div>
-
-              <!-- Live Interim Speech Stream Indicator -->
-              <div id="voice-live-interim-box" style="display:none;margin-bottom:8px;padding:8px 12px;background:#fef3c7;border:1.5px dashed #f59e0b;border-radius:6px;font-size:13px;color:#92400e;text-align:left;animation:fadeIn 0.2s ease">
-                <span style="font-weight:700">🎙️ Live Hearing / आवाज़:</span>
-                <span id="voice-interim-text" style="font-style:italic;font-weight:600;margin-left:4px"></span>
-              </div>
-
-              <textarea id="voice-transcript-textarea" rows="2" placeholder='Spoken text will appear here automatically (e.g. "5 register 100 me, 2 pen 10 me, cash")'></textarea>
-            </div>
-
-            <!-- Quick Example Speech Prompts -->
-            <div class="voice-examples">
-              <span class="voice-examples-label">💡 Bolne ke Examples:</span>
-              <div class="voice-chips">
-                <button type="button" class="voice-chip" data-speak="5 register rs.100 per, 5 copy rs.50 per, cash">"5 register rs.100 per, 5 copy rs.50 per, cash"</button>
-                <button type="button" class="voice-chip" data-speak="2 NCERT Maths 180 me aur 3 register 70 me, cash">"2 NCERT Maths 180 aur 3 register 70"</button>
-                <button type="button" class="voice-chip" data-speak="5 Reynolds pen 10 me aur 2 practical file 50 me, UPI">"5 pen 10 me, 2 file 50 me, UPI"</button>
-              </div>
-            </div>
-          </section>
-
-          <!-- Voice Ambiguity Resolution Card (Which product did you mean?) -->
-          <section class="card panel voice-ambiguity-card" id="voice-ambiguity-card" style="display:none;margin-top:14px;border:1.5px solid #8b5cf6">
-            <div class="panel-head" style="margin-bottom:10px">
-              <div>
-                <strong style="color:#7c3aed;font-size:14px">⚡ Which book / item do you mean? (कौन सा सामान देना है?)</strong>
-                <p class="muted" style="margin:2px 0 0;font-size:12.5px">Multiple catalog products match what you spoke. Tap one to add directly to the bill:</p>
-              </div>
-            </div>
-            <div class="voice-ambiguity-list" id="voice-ambiguity-list" style="display:flex;flex-direction:column;gap:8px"></div>
-          </section>
-
-          <!-- Voice Conflict & Action Banner Container (Price conflicts, Unregistered customer, Missing payment, Stock warnings) -->
-          <div id="voice-conflict-container" style="display:none;margin-top:14px;display:flex;flex-direction:column;gap:10px">
-            <!-- Dynamically populated conflict & alert cards -->
-          </div>
-
-          <!-- Voice Draft Result Card -->
-          <section class="card panel voice-draft-card" id="voice-draft-card" style="display:none">
-            <div class="panel-head">
-              <div>
-                <div style="display:flex;align-items:center;gap:10px">
-                  <h2>Generated Bill Draft / तैयार बिल</h2>
-                  <span class="status pending" id="voice-draft-badge" style="font-size:11px;font-weight:700">DRAFT — REVIEW REQUIRED</span>
-                </div>
-                <span class="muted" id="voice-draft-meta-text">Review items, edit if needed, and print or confirm.</span>
-              </div>
-              <div style="display:flex;gap:8px">
-                <button type="button" class="btn btn-sm" id="voice-btn-thermal-print" style="background:#10b981;color:#fff;font-weight:700">🧾 Thermal POS Print</button>
-                <button type="button" class="btn btn-sm danger" id="voice-btn-discard-draft">Discard</button>
-              </div>
-            </div>
-
-            <div class="table-wrap">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Item Description</th>
-                    <th style="text-align:center;width:90px">Qty</th>
-                    <th style="text-align:right;width:120px">Rate (₹)</th>
-                    <th style="text-align:right;width:120px">Amount (₹)</th>
-                    <th style="text-align:center;width:60px">Action</th>
-                  </tr>
-                </thead>
-                <tbody id="voice-draft-table-body">
-                  <!-- Dynamic Voice Draft Rows -->
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Summary & Actions -->
-            <div class="voice-draft-footer">
-              <div class="voice-draft-settings">
-                <div class="field" style="margin-bottom:8px">
-                  <label>PAYMENT METHOD</label>
-                  <select id="voice-draft-payment-method">
-                    <option value="Cash">Cash (नकद)</option>
-                    <option value="UPI">UPI / GPay / Paytm</option>
-                    <option value="Card">Card</option>
-                    <option value="Bank Transfer">Bank Transfer</option>
-                  </select>
-                </div>
-                <div class="field" style="margin-bottom:0">
-                  <label>DISCOUNT (₹)</label>
-                  <input type="number" id="voice-draft-discount" min="0" step="any" value="0">
-                </div>
-              </div>
-
-              <div class="calc-summary voice-calc-summary">
-                <div class="calc-row">
-                  <span>Subtotal:</span>
-                  <strong id="voice-draft-subtotal">₹0.00</strong>
-                </div>
-                <div class="calc-row">
-                  <span>Discount:</span>
-                  <span id="voice-draft-discount-val" style="color:var(--danger)">-₹0.00</span>
-                </div>
-                <div class="calc-row">
-                  <span>GST / Tax:</span>
-                  <span id="voice-draft-tax">₹0.00</span>
-                </div>
-                <div class="calc-row grand-total">
-                  <span>Grand Total:</span>
-                  <span id="voice-draft-grand-total">₹0.00</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Action Toolbar -->
-            <div class="voice-draft-toolbar">
-              <button type="button" class="btn secondary" id="voice-btn-edit-manual">✎ Detailed Form</button>
-              <button type="button" class="btn" id="voice-btn-share-whatsapp" style="background:#25D366;color:#fff;font-weight:700">💬 WhatsApp Share</button>
-              <div style="display:flex;gap:10px">
-                <button type="button" class="btn primary voice-confirm-btn" id="voice-btn-confirm-invoice">
-                  ✓ Confirm & Create Invoice →
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
-
       <!-- VIEW 3: INVOICES HISTORY -->
       <div class="view" id="view-invoices">
         <section class="card panel">
@@ -1604,9 +1402,9 @@
       <span class="nav-icon">＋</span>
       <span class="nav-label">New Bill</span>
     </button>
-    <button type="button" class="mobile-nav-item mobile-nav-voice" data-view="voice-billing">
-      <span class="nav-icon" style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(124,58,237,0.4)">🎙️</span>
-      <span class="nav-label" style="color:#7c3aed;font-weight:700">Voice</span>
+    <button type="button" class="mobile-nav-item" data-view="invoices">
+      <span class="nav-icon">▤</span>
+      <span class="nav-label">Invoices</span>
     </button>
     <button type="button" class="mobile-nav-item" data-view="ai-billing">
       <span class="nav-icon">✦</span>

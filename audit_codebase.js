@@ -38,7 +38,6 @@ console.log(`Checked ${checkedIds.size} unique DOM element IDs.`);
 const expectedViews = [
   'view-dashboard',
   'view-create-invoice',
-  'view-voice-billing',
   'view-ai-billing',
   'view-invoices',
   'view-customers',
