@@ -5613,6 +5613,97 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
     }
   };
 
+  // --- FLOATING FINANCE & BILL PARTICLES SYSTEM ---
+  const FinanceParticles = {
+    container: null,
+    timer: null,
+    items: [
+      { type: 'payment', icon: '💸', text: '+₹500.00', badge: 'UPI PAID' },
+      { type: 'bill', icon: '🧾', text: 'INV-1029', badge: '₹3,100' },
+      { type: 'payment', icon: '🟢', text: '+₹1,250.00', badge: 'SETTLED' },
+      { type: 'cash', icon: '💰', text: '+₹800.00', badge: 'CASH SALE' },
+      { type: 'bill', icon: '🧾', text: 'INV-1030', badge: '₹4,950' },
+      { type: 'wa', icon: '📲', text: 'WhatsApp Bill', badge: 'SENT ✓✓' },
+      { type: 'payment', icon: '💸', text: '+₹2,400.00', badge: 'GPay' },
+      { type: 'cash', icon: '🪙', text: '+₹350.00', badge: 'COUNTER' },
+      { type: 'bill', icon: '📑', text: 'GSTR-1 Ready', badge: 'VERIFIED' },
+      { type: 'payment', icon: '🟢', text: '+₹1,800.00', badge: 'Paytm' },
+      { type: 'wa', icon: '📒', text: 'Udhaar Reminder', badge: 'SENT' },
+      { type: 'cash', icon: '💵', text: '+₹5,000.00', badge: 'BULK' }
+    ],
+    currentIndex: 0,
+
+    init() {
+      this.container = document.getElementById('floating-finance-container');
+      if (!this.container) return;
+
+      // Initial spawn after 400ms
+      setTimeout(() => this.spawn(), 400);
+
+      // Har 2 seconds me naya animated bill / money particle aayega
+      if (this.timer) clearInterval(this.timer);
+      this.timer = setInterval(() => {
+        if (!document.hidden) {
+          this.spawn();
+        }
+      }, 2000);
+    },
+
+    spawn() {
+      if (!this.container) return;
+
+      // Limit concurrent particles to keep DOM clean and smooth
+      const maxParticles = window.innerWidth <= 480 ? 4 : 6;
+      if (this.container.children.length >= maxParticles) {
+        if (this.container.firstChild) {
+          this.container.removeChild(this.container.firstChild);
+        }
+      }
+
+      const item = this.items[this.currentIndex % this.items.length];
+      this.currentIndex++;
+
+      const el = document.createElement('div');
+      el.className = `finance-particle type-${item.type}`;
+
+      // Random position and rotation for natural, lively feel
+      const isMobile = window.innerWidth <= 480;
+      const minLeft = isMobile ? 8 : 6;
+      const maxLeft = isMobile ? 70 : 86;
+      const randomLeft = Math.floor(Math.random() * (maxLeft - minLeft)) + minLeft;
+      
+      const minTop = isMobile ? 55 : 45;
+      const maxTop = isMobile ? 85 : 82;
+      const randomTop = Math.floor(Math.random() * (maxTop - minTop)) + minTop;
+
+      const rotStart = (Math.random() * 8 - 4).toFixed(1) + 'deg';
+      const rotMid = (Math.random() * 8 - 4).toFixed(1) + 'deg';
+      const rotEnd = (Math.random() * 10 - 5).toFixed(1) + 'deg';
+
+      el.style.left = `${randomLeft}%`;
+      el.style.top = `${randomTop}%`;
+      el.style.setProperty('--rot-start', rotStart);
+      el.style.setProperty('--rot-mid', rotMid);
+      el.style.setProperty('--rot-end', rotEnd);
+
+      el.innerHTML = `
+        <span class="p-icon">${item.icon}</span>
+        <span class="p-amount">${item.text}</span>
+        <span class="p-badge">${item.badge}</span>
+      `;
+
+      this.container.appendChild(el);
+
+      // Auto-cleanup after animation ends (4.2s)
+      setTimeout(() => {
+        if (el && el.parentNode === this.container) {
+          el.remove();
+        }
+      }, 4300);
+    }
+  };
+
+  window.FinanceParticles = FinanceParticles;
   window.AuthController = AuthController;
   window.AiBillingController = AiBillingController;
   window.ThermalReceiptController = ThermalReceiptController;
@@ -5625,6 +5716,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
   // --- BOOTSTRAP APP ON DOM READY ---
   function bootApp() {
     ThemeManager.init();
+    FinanceParticles.init();
 
     // On desktop / laptop, restore saved sidebar collapsed state if previously toggled
     if (window.innerWidth > 768) {
