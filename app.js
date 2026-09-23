@@ -5601,6 +5601,18 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
     }
   };
 
+  window.togglePasswordVisibility = function(inputId, btnEl) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (input.type === 'password') {
+      input.type = 'text';
+      if (btnEl) btnEl.textContent = '🙈';
+    } else {
+      input.type = 'password';
+      if (btnEl) btnEl.textContent = '👁️';
+    }
+  };
+
   window.AuthController = AuthController;
   window.AiBillingController = AiBillingController;
   window.ThermalReceiptController = ThermalReceiptController;
