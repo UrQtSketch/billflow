@@ -631,6 +631,33 @@
   // Global window modal toggle
   window.closeModal = (id) => Modal.close(id);
 
+  // Global legal & privacy modal handlers
+  window.switchLegalTab = (tabName) => {
+    document.querySelectorAll('.legal-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.legal-content-pane').forEach(p => p.style.display = 'none');
+
+    const activeBtn = document.getElementById(`legal-tab-btn-${tabName}`);
+    const activePane = document.getElementById(`legal-pane-${tabName}`);
+
+    if (activeBtn) activeBtn.classList.add('active');
+    if (activePane) activePane.style.display = 'block';
+
+    const titleEl = document.getElementById('modal-legal-title');
+    if (titleEl) {
+      if (tabName === 'privacy') titleEl.textContent = 'Privacy Policy (गोपनीयता नीति)';
+      else if (tabName === 'terms') titleEl.textContent = 'Terms & Conditions (नियम एवं शर्तें)';
+      else if (tabName === 'security') titleEl.textContent = 'Data Security & Storage Standards';
+    }
+
+    const modalBody = document.querySelector('.legal-modal-body');
+    if (modalBody) modalBody.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  window.openLegalModal = (tab = 'privacy') => {
+    window.switchLegalTab(tab);
+    Modal.open('modal-legal');
+  };
+
   // --- NAVIGATION CONTROLLER ---
   const Navigation = {
     currentView: 'dashboard',

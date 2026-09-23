@@ -223,6 +223,20 @@
         <div class="auth-security-note">
           <span>🔒 100% Private • Data Stored Safely in Your Device</span>
         </div>
+
+        <div class="auth-footer-legal">
+          <div class="auth-copyright">
+            © 2026 <strong>BillFlow</strong>. All rights reserved.
+          </div>
+          <div class="auth-legal-row">
+            <button type="button" class="auth-legal-btn" onclick="window.openLegalModal('privacy')">Privacy Policy</button>
+            <span style="color:#64748b;font-size:10px">•</span>
+            <button type="button" class="auth-legal-btn" onclick="window.openLegalModal('terms')">Terms &amp; Conditions</button>
+          </div>
+          <div class="auth-created-by">
+            <span>Created with <span class="heart-pulse">❤️</span> by <strong class="creator-badge">Sketch</strong></span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1329,9 +1343,62 @@
         </section>
       </div>
 
-      <div class="footer">
-        BillFlow • Universal Business Billing System
-      </div>
+      <!-- Comprehensive App Footer -->
+      <footer class="app-footer">
+        <div class="app-footer-card">
+          <div class="app-footer-grid">
+            <div class="footer-brand-col">
+              <div class="footer-brand">
+                <span class="footer-logo">B</span>
+                <div>
+                  <strong>BillFlow PRO</strong>
+                  <small>Smart Invoicing &amp; GST POS Suite</small>
+                </div>
+              </div>
+              <p class="footer-desc">
+                High-speed billing, automated GST tax calculation, WhatsApp bills &amp; Udhaar Khata crafted specifically for Indian retailers, kirana stores, and growing businesses.
+              </p>
+              <div class="footer-trust-chips">
+                <span class="trust-chip">⚡ 100% Offline Capable</span>
+                <span class="trust-chip">🔒 DPDP Act Compliant</span>
+                <span class="trust-chip">🇮🇳 Made for Indian SMEs</span>
+              </div>
+            </div>
+
+            <div class="footer-links-col">
+              <span class="footer-col-title">LEGAL &amp; POLICIES</span>
+              <ul class="footer-links-list">
+                <li><button type="button" class="footer-link-action" onclick="window.openLegalModal('privacy')">🛡️ Privacy Policy (गोपनीयता नीति)</button></li>
+                <li><button type="button" class="footer-link-action" onclick="window.openLegalModal('terms')">📜 Terms &amp; Conditions (नियम)</button></li>
+                <li><button type="button" class="footer-link-action" onclick="window.openLegalModal('security')">🔒 Data Security &amp; Isolation</button></li>
+              </ul>
+            </div>
+
+            <div class="footer-links-col">
+              <span class="footer-col-title">QUICK ACTIONS</span>
+              <ul class="footer-links-list">
+                <li><button type="button" class="footer-link-action" onclick="window.switchView('create-invoice')">＋ Create New Invoice</button></li>
+                <li><button type="button" class="footer-link-action" onclick="window.switchView('ai-billing')">✦ Instant AI Billing</button></li>
+                <li><button type="button" class="footer-link-action" onclick="window.switchView('settings')">⚙ Business Settings &amp; Backup</button></li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="app-footer-bottom">
+            <div class="footer-copyright-text">
+              © 2026 <strong>BillFlow</strong>. All rights reserved.
+            </div>
+            <div class="footer-legal-inline">
+              <button type="button" onclick="window.openLegalModal('privacy')">Privacy Policy</button>
+              <span class="dot-sep">•</span>
+              <button type="button" onclick="window.openLegalModal('terms')">Terms &amp; Conditions</button>
+            </div>
+            <div class="footer-created-by-badge">
+              <span>Crafted with <span class="heart-pulse">❤️</span> by <strong class="sketch-signature">Sketch</strong></span>
+            </div>
+          </div>
+        </div>
+      </footer>
     </main>
   </div>
 
@@ -1874,6 +1941,117 @@
           </button>
         </div>
         <button type="button" class="btn btn-sm" onclick="closeModal('modal-gst-report')">Close</button>
+      </div>
+  <!-- MODAL: LEGAL, PRIVACY POLICY & TERMS OF SERVICE -->
+  <div class="modal-backdrop" id="modal-legal" style="display:none">
+    <div class="modal-dialog" style="max-width:820px;max-height:90vh;display:flex;flex-direction:column">
+      <div class="modal-header" style="padding:16px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px">📜</span>
+          <div>
+            <h3 id="modal-legal-title" style="margin:0;font-size:18px">Legal, Privacy Policy &amp; Terms</h3>
+            <span class="muted" style="font-size:12px">BillFlow PRO • Universal Point of Sale &amp; Billing System</span>
+          </div>
+        </div>
+        <button type="button" class="btn-close" onclick="closeModal('modal-legal')">✕</button>
+      </div>
+
+      <!-- Legal Navigation Tabs -->
+      <div class="legal-tabs-bar">
+        <button type="button" class="legal-tab-btn active" id="legal-tab-btn-privacy" onclick="window.switchLegalTab('privacy')">
+          🛡️ Privacy Policy (गोपनीयता नीति)
+        </button>
+        <button type="button" class="legal-tab-btn" id="legal-tab-btn-terms" onclick="window.switchLegalTab('terms')">
+          📜 Terms &amp; Conditions (नियम व शर्तें)
+        </button>
+        <button type="button" class="legal-tab-btn" id="legal-tab-btn-security" onclick="window.switchLegalTab('security')">
+          🔒 Data Security &amp; Isolation
+        </button>
+      </div>
+
+      <!-- Legal Content Body -->
+      <div class="modal-body legal-modal-body" style="padding:24px;overflow-y:auto;flex:1;font-size:13.5px;line-height:1.7">
+        
+        <!-- PRIVACY POLICY SECTION -->
+        <div class="legal-content-pane" id="legal-pane-privacy">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+            <span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;font-weight:700;padding:4px 10px;border-radius:6px">Effective Date: January 1, 2026</span>
+            <span class="badge" style="background:rgba(99,102,241,0.15);color:#6366f1;font-weight:700;padding:4px 10px;border-radius:6px">DPDP Act (India) Compliant</span>
+            <span class="badge" style="background:rgba(168,85,247,0.15);color:#a855f7;font-weight:700;padding:4px 10px;border-radius:6px">Created by Sketch</span>
+          </div>
+
+          <h4>1. Absolute Data Ownership (100% Aapka Data)</h4>
+          <p>At <strong>BillFlow</strong> (created with precision by <strong>Sketch</strong>), your business privacy is our top priority. We believe that your shop's transactions, bills, customer contact numbers, and margins belong exclusively to you. <strong>We do not sell, rent, monetize, or disclose your personal or commercial records to any advertisers, third-party marketing companies, or data brokers.</strong></p>
+
+          <h4>2. What Data We Handle &amp; Why</h4>
+          <p>The information entered into BillFlow is strictly utilized to operate your billing system:</p>
+          <ul style="margin:6px 0 14px 20px;padding:0">
+            <li><strong>Shop / Business Profile:</strong> Shop Name, Owner Name, Address, Phone, and GSTIN (used solely for printing on tax invoices and receipts).</li>
+            <li><strong>Customer &amp; Khata Records:</strong> Customer Name, Phone Number, and Udhaar ledger balances (used strictly for generating invoices and optional WhatsApp payment reminders sent from your device).</li>
+            <li><strong>Inventory &amp; Products:</strong> Product names, SKUs, selling prices, cost prices, stock counts, and GST tax slabs.</li>
+          </ul>
+
+          <h4>3. Local Sandboxed Storage (Offline Privacy)</h4>
+          <p>When running in Guest/Demo mode or offline, all records are saved directly in your web browser's isolated Local Storage sandbox on your device. No customer numbers or sales records are transmitted over the network unless you explicitly log into your cloud account.</p>
+
+          <h4>4. Cloud Encryption &amp; Protection</h4>
+          <p>For cloud accounts, all communication is secured using enterprise-grade <strong>TLS 1.3 / HTTPS encryption in transit</strong> and isolated database rows per business ID at rest. Only your verified session can read or write to your shop.</p>
+
+          <h4>5. Instant Data Export &amp; Deletion</h4>
+          <p>You can export your complete inventory, customer khata, and invoice history to an unencrypted JSON file anytime from <strong>Business Settings &gt; Export All Data</strong>. You also hold the right to delete any invoice, customer, or entire account with immediate effect.</p>
+
+          <h4>6. Author &amp; Developer Attribution</h4>
+          <p>BillFlow was designed, architected, and engineered by <strong>Sketch</strong>. For any technical questions or support, contact support@billflow.in.</p>
+        </div>
+
+        <!-- TERMS & CONDITIONS SECTION -->
+        <div class="legal-content-pane" id="legal-pane-terms" style="display:none">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+            <span class="badge" style="background:rgba(99,102,241,0.15);color:#6366f1;font-weight:700;padding:4px 10px;border-radius:6px">Last Updated: September 2026</span>
+            <span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;font-weight:700;padding:4px 10px;border-radius:6px">Retail &amp; SME License</span>
+          </div>
+
+          <h4>1. Acceptance of Terms</h4>
+          <p>By using, accessing, or generating invoices with <strong>BillFlow</strong> ("the Application"), you agree to abide by these Terms &amp; Conditions. If you do not agree to these terms, please discontinue using the software.</p>
+
+          <h4>2. Permitted Commercial Use</h4>
+          <p>BillFlow is provided to retail shops, kirana merchants, freelancers, service providers, distributors, and SMEs to generate customer bills, print thermal POS slips, manage Udhaar ledgers, and analyze profit margins. You are permitted to generate unlimited invoices for legitimate lawful commercial activities.</p>
+
+          <h4>3. Merchant Responsibility for GST &amp; Tax Accuracy</h4>
+          <p>BillFlow provides tools for automatic computation of GST slabs (0%, 5%, 12%, 18%, 28%) and custom taxes. <strong>The business owner/merchant remains solely responsible</strong> for ensuring that their registered GSTIN, HSN/SAC codes, and invoice numbers conform with the Indian Goods and Services Tax Act and local commercial tax regulations.</p>
+
+          <h4>4. Copyright &amp; Intellectual Property</h4>
+          <p>All software code, soundbox voice synthesis algorithms, visual interfaces, brand identity, and layouts of BillFlow are copyrighted by <strong>Sketch</strong>. Unauthorized commercial reselling or repackaging of the source code is prohibited.</p>
+
+          <h4>5. Limitation of Liability</h4>
+          <p>BillFlow is provided on an "as is" and "as available" basis. While every effort is made to maintain 100% calculation precision and high system availability, Sketch and the BillFlow team will not be held liable for any financial losses or tax penalties arising from device hardware failure, browser storage clearing, or merchant miscalculations. Users are encouraged to maintain regular JSON backups via Business Settings.</p>
+        </div>
+
+        <!-- DATA SECURITY SECTION -->
+        <div class="legal-content-pane" id="legal-pane-security" style="display:none">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+            <span class="badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;font-weight:700;padding:4px 10px;border-radius:6px">Zero Tracking Guarantee</span>
+            <span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;font-weight:700;padding:4px 10px;border-radius:6px">Offline-First Engine</span>
+          </div>
+
+          <h4>1. Origin Sandboxed Storage</h4>
+          <p>Offline data is sandboxed under your browser's dedicated storage partition. Other websites or malicious scripts cannot access your invoice or customer records.</p>
+
+          <h4>2. Zero Third-Party Advertising Trackers</h4>
+          <p>BillFlow contains NO tracking cookies, Meta pixel tags, Google ad beacons, or telemetry that harvests consumer spending habits.</p>
+
+          <h4>3. Real-Time Offline Resilience</h4>
+          <p>Even during internet outages, you can continue generating bills, printing receipts, and managing inventory without interruption.</p>
+
+          <h4>4. Crafted by Sketch</h4>
+          <p>Engineered with love and care by <strong>Sketch</strong> to empower Indian shopkeepers and entrepreneurs with high-speed, trustworthy digital billing.</p>
+        </div>
+
+      </div>
+
+      <div class="modal-footer" style="padding:14px 22px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <span style="font-size:12px;color:var(--muted)">© 2026 BillFlow • Created with ❤️ by <strong>Sketch</strong></span>
+        <button type="button" class="btn primary" onclick="closeModal('modal-legal')">Understood &amp; Close</button>
       </div>
     </div>
   </div>
