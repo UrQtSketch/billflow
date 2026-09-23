@@ -3959,6 +3959,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
             const res = await ApiClient.createInvoice(activeBizId, payload);
             if (res.invoice) {
               Toast.show(`Invoice #${res.invoice.invoice_number || data.invoiceNumber} generated successfully!`, 'success');
+              if (typeof SoundboxAudio !== 'undefined') SoundboxAudio.speakInvoiceCreated();
               await AuthController.syncFromCloud(activeBizId);
               this.resetForm();
               DashboardController.render();
@@ -4039,6 +4040,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
         Store.saveSettings(settings);
 
         Toast.show(`Invoice #${data.invoiceNumber} generated successfully!`, 'success');
+        if (typeof SoundboxAudio !== 'undefined') SoundboxAudio.speakInvoiceCreated();
       }
 
       // Cleanly reset edit state and redirect to invoices history
@@ -5117,6 +5119,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
             Store.saveSettings(settings);
 
             Toast.show(`Invoice ${norm.invoiceNumber} created successfully!`, 'success');
+            if (typeof SoundboxAudio !== 'undefined') SoundboxAudio.speakInvoiceCreated();
             document.getElementById('ai-draft-card').style.display = 'none';
             this.activeDraft = null;
 
@@ -5153,6 +5156,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
         Store.saveSettings(settings);
 
         Toast.show(`Invoice ${newInvoice.invoiceNumber} created successfully!`, 'success');
+        if (typeof SoundboxAudio !== 'undefined') SoundboxAudio.speakInvoiceCreated();
         document.getElementById('ai-draft-card').style.display = 'none';
         this.activeDraft = null;
 
@@ -5613,6 +5617,130 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
     }
   };
 
+  // --- PAYTM SOUNDBOX VOICE & CHIME ALERT SYSTEM ---
+  const SoundboxAudio = {
+    audioCtx: null,
+    bannerTimeout: null,
+
+    playChime() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!this.audioCtx) this.audioCtx = new AudioCtx();
+        if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+
+        const ctx = this.audioCtx;
+        const now = ctx.currentTime;
+
+        // Paytm Soundbox signature ascending 3-tone chime: D5 (587.3Hz), A5 (880Hz), D6 (1174.6Hz)
+        const tones = [
+          { freq: 587.33, start: 0, duration: 0.12 },
+          { freq: 880.00, start: 0.10, duration: 0.14 },
+          { freq: 1174.66, start: 0.22, duration: 0.38 }
+        ];
+
+        tones.forEach(t => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(t.freq, now + t.start);
+
+          gain.gain.setValueAtTime(0, now + t.start);
+          gain.gain.linearRampToValueAtTime(0.32, now + t.start + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + t.start + t.duration);
+
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          osc.start(now + t.start);
+          osc.stop(now + t.start + t.duration);
+        });
+      } catch (err) {
+        console.warn('Soundbox chime notice', err);
+      }
+    },
+
+    speakInvoiceCreated(customMessage) {
+      // 1. Play melodic Paytm Soundbox chime
+      this.playChime();
+
+      // 2. Play female voice announcement
+      const text = customMessage || 'Invoice has been created!';
+
+      if ('speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel(); // cancel any active speech
+
+          const utter = new SpeechSynthesisUtterance(text);
+          utter.rate = 1.0;
+          utter.pitch = 1.25; // Sweet, polite female tone like Paytm soundbox
+          utter.volume = 1.0;
+
+          // Find best Indian / English female voice
+          const voices = window.speechSynthesis.getVoices() || [];
+          const femaleVoice = voices.find(v =>
+            (v.lang.includes('IN') && (v.name.includes('Female') || v.name.includes('Neerja') || v.name.includes('Swara') || v.name.includes('Heera'))) ||
+            v.name.includes('Female') ||
+            v.name.includes('Google UK English Female') ||
+            v.name.includes('Google US English Female') ||
+            v.name.includes('Zira') ||
+            v.name.includes('Samantha') ||
+            (v.lang.startsWith('en') && v.name.includes('Natural'))
+          );
+
+          if (femaleVoice) {
+            utter.voice = femaleVoice;
+          } else {
+            utter.lang = 'en-IN';
+          }
+
+          // Delay speech slightly (160ms) so chime tone rings nicely first
+          setTimeout(() => {
+            try {
+              window.speechSynthesis.speak(utter);
+            } catch (e) {}
+          }, 160);
+        } catch (e) {
+          console.warn('Speech synthesis notice', e);
+        }
+      }
+
+      // 3. Display glowing visual Paytm Soundbox banner for 3 seconds
+      this.showSoundboxBanner(text);
+    },
+
+    showSoundboxBanner(text) {
+      let banner = document.getElementById('soundbox-voice-banner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'soundbox-voice-banner';
+        banner.className = 'soundbox-voice-banner';
+        document.body.appendChild(banner);
+      }
+
+      banner.innerHTML = `
+        <div class="soundbox-badge">
+          <span class="soundbox-speaker">📢</span>
+          <span class="soundbox-wave"></span>
+          <span class="soundbox-wave"></span>
+          <span class="soundbox-wave"></span>
+        </div>
+        <div class="soundbox-text">
+          <small>Paytm Soundbox Alert</small>
+          <strong>"${text}"</strong>
+        </div>
+      `;
+
+      banner.classList.add('show');
+
+      // Har baar 3 seconds baad automatically disappear
+      if (this.bannerTimeout) clearTimeout(this.bannerTimeout);
+      this.bannerTimeout = setTimeout(() => {
+        if (banner) banner.classList.remove('show');
+      }, 3000);
+    }
+  };
+
   // --- FLOATING FINANCE & BILL PARTICLES SYSTEM ---
   const FinanceParticles = {
     container: null,
@@ -5703,6 +5831,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
     }
   };
 
+  window.SoundboxAudio = SoundboxAudio;
   window.FinanceParticles = FinanceParticles;
   window.AuthController = AuthController;
   window.AiBillingController = AiBillingController;

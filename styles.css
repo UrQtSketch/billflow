@@ -1981,6 +1981,99 @@ body.sidebar-collapsed .main {
   .finance-particle .p-icon {
     font-size: 12px;
   }
+/* --- PAYTM SOUNDBOX VOICE ALERT BANNER (3 SECONDS) --- */
+.soundbox-voice-banner {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-35px) scale(0.9);
+  background: rgba(15, 23, 42, 0.94);
+  border: 1.5px solid #00baf2;
+  box-shadow: 0 12px 35px rgba(0, 186, 242, 0.38), 0 0 25px rgba(0, 186, 242, 0.25);
+  border-radius: 999px;
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 100020;
+  color: #ffffff;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.soundbox-voice-banner.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.soundbox-badge {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.soundbox-speaker {
+  font-size: 20px;
+  animation: soundboxSpeakerPulse 0.5s infinite alternate;
+  display: inline-block;
+}
+
+.soundbox-wave {
+  width: 3px;
+  height: 14px;
+  background: #00baf2;
+  border-radius: 2px;
+  animation: soundboxWave 0.45s ease-in-out infinite alternate;
+}
+.soundbox-wave:nth-child(2) { animation-delay: 0.12s; height: 18px; }
+.soundbox-wave:nth-child(3) { animation-delay: 0.24s; height: 13px; }
+
+@keyframes soundboxSpeakerPulse {
+  0% { transform: scale(0.95); }
+  100% { transform: scale(1.15) rotate(4deg); }
+}
+
+@keyframes soundboxWave {
+  0% { transform: scaleY(0.35); opacity: 0.45; }
+  100% { transform: scaleY(1.35); opacity: 1; }
+}
+
+.soundbox-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.soundbox-text small {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #38bdf8;
+}
+
+.soundbox-text strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+@media (max-width: 480px) {
+  .soundbox-voice-banner {
+    top: 14px;
+    width: 90%;
+    max-width: 360px;
+    padding: 8px 16px;
+    border-radius: 16px;
+  }
+  .soundbox-text strong {
+    font-size: 13px;
+  }
 }
 
 /* --- AUTH FULLSCREEN LANDING OVERLAY (MODERN LUXURY FINTECH GLASSMORPHISM) --- */
