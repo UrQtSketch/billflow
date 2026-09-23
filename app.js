@@ -24,7 +24,8 @@
     gstin: '07AAAAA0000A1Z5',
     invoicePrefix: 'INV-',
     nextNumber: 1029,
-    currency: '₹'
+    currency: '₹',
+    upiId: 'deepaksharma@okaxis'
   };
 
   const defaultProducts = [
@@ -1348,6 +1349,7 @@
       setVal('setting-prefix', settings.invoicePrefix);
       setVal('setting-next-number', settings.nextNumber);
       setVal('setting-currency', settings.currency);
+      setVal('setting-upi-id', settings.upiId || 'deepaksharma@okaxis');
 
       // Update global business displays
       this.updateGlobalBranding(settings);
@@ -1361,7 +1363,8 @@
         gstin: document.getElementById('setting-gstin').value.trim(),
         invoicePrefix: document.getElementById('setting-prefix').value.trim() || 'INV-',
         nextNumber: parseInt(document.getElementById('setting-next-number').value, 10) || 1001,
-        currency: document.getElementById('setting-currency').value.trim() || '₹'
+        currency: document.getElementById('setting-currency').value.trim() || '₹',
+        upiId: document.getElementById('setting-upi-id') ? document.getElementById('setting-upi-id').value.trim() : 'deepaksharma@okaxis'
       };
 
       Store.saveSettings(settings);
@@ -1380,7 +1383,8 @@
               gstin: settings.gstin,
               invoicePrefix: settings.invoicePrefix,
               nextNumber: settings.nextNumber,
-              currency: settings.currency
+              currency: settings.currency,
+              upiId: settings.upiId
             });
           } catch (err) {
             console.warn('Cloud settings update issue', err);
@@ -1713,14 +1717,30 @@
       const settings = Store.getSettings();
       const query = (document.getElementById('customer-search')?.value || '').toLowerCase().trim();
 
+      // Update Udhaar Khata KPIs & summary
+      if (typeof UdhaarKhataController !== 'undefined') {
+        UdhaarKhataController.updateKpis();
+      }
+
       const filtered = customers.filter(c => {
-        return (c.name || '').toLowerCase().includes(query) ||
-               (c.phone || '').toLowerCase().includes(query) ||
-               (c.email || '').toLowerCase().includes(query);
+        const matchesQuery = (c.name || '').toLowerCase().includes(query) ||
+                             (c.phone || '').toLowerCase().includes(query) ||
+                             (c.email || '').toLowerCase().includes(query);
+        if (!matchesQuery) return false;
+
+        // If Udhaar Khata tab is selected, only show customers with pending dues > 0
+        if (typeof UdhaarKhataController !== 'undefined' && UdhaarKhataController.activeFilter === 'udhaar') {
+          const custInvoices = invoices.filter(inv => inv.customerId === c.id || inv.customerName === c.name);
+          const totalPending = custInvoices.reduce((sum, inv) => sum + (Number(inv.balanceDue) || 0), 0);
+          return totalPending > 0;
+        }
+
+        return true;
       });
 
       if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><div class="empty-state-icon">♙</div><h3>No customers found</h3><p>Click "+ Add Customer" to register your clients.</p></td></tr>`;
+        const isUdhaarTab = typeof UdhaarKhataController !== 'undefined' && UdhaarKhataController.activeFilter === 'udhaar';
+        tbody.innerHTML = `<tr><td colspan="8" class="empty-state"><div class="empty-state-icon">♙</div><h3>${isUdhaarTab ? 'No pending dues found / कोई बकाया नहीं है' : 'No customers found'}</h3><p>${isUdhaarTab ? 'All customers are fully paid! Khata is completely clear.' : 'Click "+ Add Customer" to register your clients.'}</p></td></tr>`;
         return;
       }
 
@@ -1741,12 +1761,20 @@
             <td><strong>${Utils.formatCurrency(totalBilled, settings.currency)}</strong></td>
             <td>
               ${totalPending > 0
-                ? `<span class="status pending">${Utils.formatCurrency(totalPending, settings.currency)}</span>`
+                ? `<span class="status pending" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;font-weight:700">${Utils.formatCurrency(totalPending, settings.currency)}</span>`
                 : `<span class="status paid">₹0.00</span>`
               }
             </td>
             <td>
-              <div class="actions" style="justify-content:flex-start">
+              <div class="actions" style="justify-content:flex-start;gap:6px">
+                ${totalPending > 0 ? `
+                  <button class="btn btn-sm btn-whatsapp-reminder" onclick="window.UdhaarKhataController.openReminderModal('${c.id}')" title="Send WhatsApp Payment Reminder & UPI QR" style="background:#25D366;color:#fff;font-weight:700;display:inline-flex;align-items:center;gap:3px;border:none">
+                    <span>📲</span> Reminder
+                  </button>
+                  <button class="btn btn-sm" onclick="window.UdhaarKhataController.openRecordPaymentModal('${c.id}')" title="Record Payment / उधारी जमा करें" style="background:#3b82f6;color:#fff;font-weight:700;border:none">
+                    💳 Settle
+                  </button>
+                ` : ''}
                 <button class="btn btn-sm" onclick="window.viewCustomerHistory('${c.id}')" title="Billing History">History</button>
                 <button class="btn btn-sm" onclick="window.editCustomer('${c.id}')">Edit</button>
                 <button class="btn btn-sm danger" onclick="window.deleteCustomer('${c.id}')">Delete</button>
@@ -1875,6 +1903,33 @@
       document.getElementById('history-total-paid').textContent = Utils.formatCurrency(totalPaid, settings.currency);
       document.getElementById('history-total-pending').textContent = Utils.formatCurrency(totalPending, settings.currency);
 
+      // Udhaar Alert Banner inside history modal
+      const alertBox = document.getElementById('history-udhaar-alert-box');
+      const alertPending = document.getElementById('history-alert-pending-amount');
+      const btnSendReminder = document.getElementById('history-btn-send-reminder');
+      const btnRecordPayment = document.getElementById('history-btn-record-payment');
+
+      if (alertBox) {
+        if (totalPending > 0) {
+          alertBox.style.display = 'block';
+          if (alertPending) alertPending.textContent = Utils.formatCurrency(totalPending, settings.currency);
+          if (btnSendReminder) {
+            btnSendReminder.onclick = () => {
+              Modal.close('modal-customer-history');
+              UdhaarKhataController.openReminderModal(customer.id);
+            };
+          }
+          if (btnRecordPayment) {
+            btnRecordPayment.onclick = () => {
+              Modal.close('modal-customer-history');
+              UdhaarKhataController.openRecordPaymentModal(customer.id);
+            };
+          }
+        } else {
+          alertBox.style.display = 'none';
+        }
+      }
+
       const tbody = document.getElementById('history-invoices-tbody');
       if (custInvoices.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="empty-state"><p>No billing history found for this customer.</p></td></tr>`;
@@ -1890,7 +1945,14 @@
               <td>${Utils.formatDate(inv.date)}</td>
               <td><strong>${Utils.formatCurrency(inv.grandTotal, settings.currency)}</strong></td>
               <td><span class="status ${statusClass}">${Utils.escapeHtml(inv.paymentStatus)}</span></td>
-              <td><button class="btn btn-sm" onclick="window.viewInvoice('${inv.id}')">View</button></td>
+              <td>
+                <div style="display:flex;gap:4px">
+                  <button class="btn btn-sm" onclick="window.viewInvoice('${inv.id}')">View</button>
+                  ${Number(inv.balanceDue || 0) > 0 ? `
+                    <button class="btn btn-sm" onclick="Modal.close('modal-customer-history'); window.UdhaarKhataController.openRecordPaymentModal('${customer.id}', '${inv.id}')" style="background:#10b981;color:#fff;border:none;font-weight:700" title="Settle this bill">Settle</button>
+                  ` : ''}
+                </div>
+              </td>
             </tr>
           `;
         }).join('');
@@ -1924,6 +1986,381 @@
   window.editCustomer = (id) => CustomerController.openEditModal(id);
   window.deleteCustomer = (id) => CustomerController.delete(id);
   window.viewCustomerHistory = (id) => CustomerController.viewHistory(id);
+
+  // ============================================================
+  // UDHAAR KHATA & CUSTOMER PAYMENT REMINDER CONTROLLER (उधारी खाता)
+  // ============================================================
+  const UdhaarKhataController = {
+    activeFilter: 'all', // 'all' or 'udhaar'
+    activeReminderCustomer: null,
+
+    init() {
+      // Filter tabs in Customer Directory
+      const tabAll = document.getElementById('tab-cust-all');
+      const tabUdhaar = document.getElementById('tab-cust-udhaar');
+
+      if (tabAll && !tabAll.dataset.bound) {
+        tabAll.dataset.bound = 'true';
+        tabAll.addEventListener('click', () => {
+          this.activeFilter = 'all';
+          tabAll.classList.add('active');
+          if (tabUdhaar) tabUdhaar.classList.remove('active');
+          CustomerController.renderList();
+        });
+      }
+
+      if (tabUdhaar && !tabUdhaar.dataset.bound) {
+        tabUdhaar.dataset.bound = 'true';
+        tabUdhaar.addEventListener('click', () => {
+          this.activeFilter = 'udhaar';
+          tabUdhaar.classList.add('active');
+          if (tabAll) tabAll.classList.remove('active');
+          CustomerController.renderList();
+        });
+      }
+
+      // Clicking Pending Amount stat on Dashboard navigates to Udhaar Khata
+      const statPendingCard = document.getElementById('stat-pending-amount');
+      if (statPendingCard && statPendingCard.parentElement && !statPendingCard.parentElement.dataset.boundKhata) {
+        statPendingCard.parentElement.dataset.boundKhata = 'true';
+        statPendingCard.parentElement.style.cursor = 'pointer';
+        statPendingCard.parentElement.title = 'Click to open Udhaar Khata / बकाया खाता खोलें';
+        statPendingCard.parentElement.addEventListener('click', () => {
+          this.activeFilter = 'udhaar';
+          Navigation.showView('customers');
+          if (tabUdhaar) {
+            tabUdhaar.classList.add('active');
+            if (tabAll) tabAll.classList.remove('active');
+          }
+          CustomerController.renderList();
+        });
+      }
+
+      // Reminder Modal Actions
+      const btnSendWhatsApp = document.getElementById('btn-reminder-send-whatsapp');
+      if (btnSendWhatsApp && !btnSendWhatsApp.dataset.bound) {
+        btnSendWhatsApp.dataset.bound = 'true';
+        btnSendWhatsApp.addEventListener('click', () => {
+          if (this.activeReminderCustomer) {
+            this.sendWhatsApp(this.activeReminderCustomer.id);
+          }
+        });
+      }
+
+      const btnCopyMsg = document.getElementById('btn-reminder-copy-msg');
+      if (btnCopyMsg && !btnCopyMsg.dataset.bound) {
+        btnCopyMsg.dataset.bound = 'true';
+        btnCopyMsg.addEventListener('click', () => {
+          if (this.activeReminderCustomer) {
+            this.copyReminderMessage(this.activeReminderCustomer.id);
+          }
+        });
+      }
+
+      const btnOpenPaymentFromReminder = document.getElementById('btn-reminder-open-payment');
+      if (btnOpenPaymentFromReminder && !btnOpenPaymentFromReminder.dataset.bound) {
+        btnOpenPaymentFromReminder.dataset.bound = 'true';
+        btnOpenPaymentFromReminder.addEventListener('click', () => {
+          if (this.activeReminderCustomer) {
+            const custId = this.activeReminderCustomer.id;
+            Modal.close('modal-payment-reminder');
+            this.openRecordPaymentModal(custId);
+          }
+        });
+      }
+
+      // Payment Settlement Form Submission
+      const formPayment = document.getElementById('form-record-payment');
+      if (formPayment && !formPayment.dataset.bound) {
+        formPayment.dataset.bound = 'true';
+        formPayment.addEventListener('submit', (e) => {
+          e.preventDefault();
+          this.handlePaymentSubmit();
+        });
+      }
+    },
+
+    getSummary() {
+      const customers = Store.getCustomers();
+      const invoices = Store.getInvoices();
+
+      let totalOutstanding = 0;
+      let totalCollected = 0;
+      let customersWithDue = 0;
+
+      const customerMap = {};
+
+      customers.forEach(c => {
+        const custInvoices = invoices.filter(inv => inv.customerId === c.id || inv.customerName === c.name);
+        const pending = custInvoices.reduce((sum, inv) => sum + (Number(inv.balanceDue) || 0), 0);
+        const billed = custInvoices.reduce((sum, inv) => sum + (Number(inv.grandTotal) || 0), 0);
+        const paid = custInvoices.reduce((sum, inv) => sum + (Number(inv.paidAmount) || 0), 0);
+
+        totalOutstanding += pending;
+        totalCollected += paid;
+
+        if (pending > 0) {
+          customersWithDue++;
+        }
+
+        customerMap[c.id] = {
+          customer: c,
+          pending: pending,
+          billed: billed,
+          paid: paid,
+          invoices: custInvoices
+        };
+      });
+
+      return {
+        totalOutstanding,
+        totalCollected,
+        customersWithDue,
+        customerMap
+      };
+    },
+
+    updateKpis() {
+      const summary = this.getSummary();
+      const settings = Store.getSettings();
+
+      const elTotalPending = document.getElementById('khata-total-pending');
+      const elCount = document.getElementById('khata-pending-customers-count');
+      const elCollected = document.getElementById('khata-total-collected');
+      const badgeCount = document.getElementById('badge-udhaar-count');
+
+      if (elTotalPending) elTotalPending.textContent = Utils.formatCurrency(summary.totalOutstanding, settings.currency);
+      if (elCount) elCount.textContent = summary.customersWithDue;
+      if (elCollected) elCollected.textContent = Utils.formatCurrency(summary.totalCollected, settings.currency);
+      if (badgeCount) badgeCount.textContent = summary.customersWithDue;
+    },
+
+    generateUpiUrl(upiId, businessName, amount, customerName) {
+      const cleanUpi = (upiId || 'deepaksharma@okaxis').trim();
+      const note = `Khata Payment - ${customerName}`;
+      return `upi://pay?pa=${encodeURIComponent(cleanUpi)}&pn=${encodeURIComponent(businessName)}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(note)}`;
+    },
+
+    generateWhatsAppMessage(customer, pendingInvoices, totalDue, settings) {
+      const upiId = settings.upiId || 'deepaksharma@okaxis';
+      const upiUrl = this.generateUpiUrl(upiId, settings.businessName, totalDue, customer.name);
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiUrl)}`;
+
+      let invListText = '';
+      pendingInvoices.forEach((inv) => {
+        invListText += `• Bill #${inv.invoiceNumber} (${Utils.formatDate(inv.date)}): ₹${Number(inv.balanceDue).toFixed(2)} due\n`;
+      });
+
+      return `📢 *PAYMENT REMINDER / उधारी भुगतान सूचना*
+*${settings.businessName}*
+
+Namaste ${customer.name} ji,
+
+Aapka hamari dukan par kul balance *₹${totalDue.toFixed(2)}* pending/udhaar hai.
+
+📋 *Pending Bills / बकाया बिल विवरण:*
+${invListText.trim()}
+
+💰 *Total Due Amount: ₹${totalDue.toFixed(2)}*
+
+Kripya niche diye gaye UPI link ya QR code se payment karein:
+👉 *UPI Direct Pay Link:* ${upiUrl}
+
+📱 *UPI ID:* ${upiId}
+🖼️ *Scan & Pay QR:* ${qrImageUrl}
+
+Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
+    },
+
+    openReminderModal(customerId) {
+      const customers = Store.getCustomers();
+      const customer = customers.find(c => c.id === customerId);
+      if (!customer) return;
+
+      this.activeReminderCustomer = customer;
+      const invoices = Store.getInvoices();
+      const settings = Store.getSettings();
+
+      const custInvoices = invoices.filter(inv => inv.customerId === customer.id || inv.customerName === customer.name);
+      const pendingInvoices = custInvoices.filter(inv => (Number(inv.balanceDue) || 0) > 0);
+      const totalDue = pendingInvoices.reduce((sum, inv) => sum + (Number(inv.balanceDue) || 0), 0);
+
+      const upiId = settings.upiId || 'deepaksharma@okaxis';
+      const upiUrl = this.generateUpiUrl(upiId, settings.businessName, totalDue, customer.name);
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiUrl)}`;
+
+      // Update Modal Elements
+      document.getElementById('reminder-cust-name').textContent = customer.name;
+      document.getElementById('reminder-cust-phone').textContent = customer.phone || 'Phone not provided';
+      document.getElementById('reminder-due-badge').textContent = Utils.formatCurrency(totalDue, settings.currency);
+      document.getElementById('reminder-display-upi-id').textContent = upiId;
+
+      const qrImg = document.getElementById('reminder-upi-qr-img');
+      if (qrImg) qrImg.src = qrImageUrl;
+
+      // Render Pending Invoices Mini List
+      const invListContainer = document.getElementById('reminder-pending-invoices-list');
+      if (invListContainer) {
+        if (pendingInvoices.length === 0) {
+          invListContainer.innerHTML = '<div class="muted" style="font-size:12px">No pending invoices.</div>';
+        } else {
+          invListContainer.innerHTML = pendingInvoices.map(inv => `
+            <div style="display:flex;justify-content:space-between;align-items:center;background:var(--panel);padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px">
+              <div>
+                <strong>#${Utils.escapeHtml(inv.invoiceNumber)}</strong>
+                <span class="muted" style="font-size:11px;margin-left:4px">(${Utils.formatDate(inv.date)})</span>
+              </div>
+              <span style="color:#ef4444;font-weight:700">₹${Number(inv.balanceDue).toFixed(2)}</span>
+            </div>
+          `).join('');
+        }
+      }
+
+      // WhatsApp message preview
+      const msg = this.generateWhatsAppMessage(customer, pendingInvoices, totalDue, settings);
+      const previewBox = document.getElementById('reminder-message-preview');
+      if (previewBox) {
+        previewBox.textContent = msg;
+      }
+
+      Modal.open('modal-payment-reminder');
+    },
+
+    sendWhatsApp(customerId) {
+      const customers = Store.getCustomers();
+      const customer = customers.find(c => c.id === customerId);
+      if (!customer) return;
+
+      const invoices = Store.getInvoices();
+      const settings = Store.getSettings();
+      const custInvoices = invoices.filter(inv => inv.customerId === customer.id || inv.customerName === customer.name);
+      const pendingInvoices = custInvoices.filter(inv => (Number(inv.balanceDue) || 0) > 0);
+      const totalDue = pendingInvoices.reduce((sum, inv) => sum + (Number(inv.balanceDue) || 0), 0);
+
+      const msg = this.generateWhatsAppMessage(customer, pendingInvoices, totalDue, settings);
+
+      let phone = (customer.phone || '').replace(/\D/g, '');
+      if (phone.length === 10) {
+        phone = '91' + phone;
+      }
+
+      const waUrl = phone
+        ? `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`
+        : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+
+      window.open(waUrl, '_blank');
+    },
+
+    copyReminderMessage(customerId) {
+      const previewBox = document.getElementById('reminder-message-preview');
+      if (previewBox && previewBox.textContent) {
+        navigator.clipboard.writeText(previewBox.textContent).then(() => {
+          Toast.show('WhatsApp reminder text copied to clipboard!', 'success');
+        }).catch(() => {
+          Toast.show('Could not copy to clipboard', 'warning');
+        });
+      }
+    },
+
+    openRecordPaymentModal(customerId, targetInvoiceId = null) {
+      const customers = Store.getCustomers();
+      const customer = customers.find(c => c.id === customerId);
+      if (!customer) return;
+
+      const invoices = Store.getInvoices();
+      const custInvoices = invoices.filter(inv => inv.customerId === customer.id || inv.customerName === customer.name);
+      let pendingDue = 0;
+
+      if (targetInvoiceId) {
+        const inv = custInvoices.find(i => i.id === targetInvoiceId);
+        pendingDue = inv ? Number(inv.balanceDue || 0) : 0;
+      } else {
+        pendingDue = custInvoices.reduce((sum, inv) => sum + (Number(inv.balanceDue) || 0), 0);
+      }
+
+      document.getElementById('settle-customer-id').value = customer.id;
+      document.getElementById('settle-customer-name').textContent = customer.name;
+      document.getElementById('settle-customer-phone').textContent = customer.phone || 'No phone';
+      document.getElementById('settle-customer-due').textContent = Utils.formatCurrency(pendingDue, '₹');
+      document.getElementById('settle-amount-input').value = pendingDue > 0 ? pendingDue : '';
+      document.getElementById('settle-amount-input').max = pendingDue > 0 ? pendingDue : '';
+      document.getElementById('settle-date-input').value = Utils.todayYMD();
+      document.getElementById('settle-note-input').value = '';
+
+      Modal.open('modal-record-payment');
+    },
+
+    async handlePaymentSubmit() {
+      const customerId = document.getElementById('settle-customer-id').value;
+      const amount = parseFloat(document.getElementById('settle-amount-input').value) || 0;
+      const paymentMethod = document.getElementById('settle-payment-method').value;
+      const date = document.getElementById('settle-date-input').value;
+      const note = document.getElementById('settle-note-input').value.trim();
+
+      if (amount <= 0) {
+        Toast.show('Please enter a valid payment amount', 'warning');
+        return;
+      }
+
+      const customers = Store.getCustomers();
+      const customer = customers.find(c => c.id === customerId);
+      if (!customer) return;
+
+      const invoices = Store.getInvoices();
+      // Get pending/partial invoices for this customer, sorted by date ascending (oldest first FIFO)
+      const custInvoices = invoices.filter(inv =>
+        (inv.customerId === customer.id || inv.customerName === customer.name) &&
+        (Number(inv.balanceDue) || 0) > 0
+      ).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      let remainingPayment = amount;
+
+      for (const inv of custInvoices) {
+        if (remainingPayment <= 0) break;
+
+        const currentBalance = Number(inv.balanceDue) || 0;
+        const currentPaid = Number(inv.paidAmount) || 0;
+
+        if (remainingPayment >= currentBalance) {
+          inv.paidAmount = currentPaid + currentBalance;
+          inv.balanceDue = 0;
+          inv.paymentStatus = 'Paid';
+          inv.paymentMethod = paymentMethod;
+          remainingPayment -= currentBalance;
+        } else {
+          inv.paidAmount = currentPaid + remainingPayment;
+          inv.balanceDue = currentBalance - remainingPayment;
+          inv.paymentStatus = 'Partial';
+          inv.paymentMethod = paymentMethod;
+          remainingPayment = 0;
+        }
+
+        if (note) {
+          inv.notes = inv.notes ? `${inv.notes} | Settlement: ${note}` : `Settlement: ${note}`;
+        }
+      }
+
+      Store.saveInvoices(invoices);
+      Modal.close('modal-record-payment');
+
+      // Sync to cloud if authenticated
+      if (AuthController.isAuthenticated()) {
+        const activeBizId = AuthController.getActiveBusinessId();
+        try {
+          await ApiClient.syncInvoices(activeBizId, invoices);
+        } catch (err) {
+          console.warn('Cloud sync issue for payment settlement', err);
+        }
+      }
+
+      Toast.show(`🎉 Recorded payment of ₹${amount.toFixed(2)} for ${customer.name}! Khata updated.`, 'success');
+
+      // Refresh all views
+      CustomerController.renderList();
+      DashboardController.render();
+      InvoicesListController.render();
+    }
+  };
 
   // --- INVOICE CONTROLLER (CREATE & EDIT & LIVE PREVIEW) ---
   const InvoiceController = {
@@ -4424,6 +4861,7 @@
   window.ThermalReceiptController = ThermalReceiptController;
   window.SalesAnalysisController = SalesAnalysisController;
   window.ThemeManager = ThemeManager;
+  window.UdhaarKhataController = UdhaarKhataController;
 
   // --- BOOTSTRAP APP ON DOM READY ---
   document.addEventListener('DOMContentLoaded', () => {
@@ -4439,6 +4877,7 @@
     SettingsController.loadSettings();
     ProductController.init();
     CustomerController.init();
+    UdhaarKhataController.init();
     InvoiceController.init();
     InvoicesListController.init();
     AiBillingController.init();

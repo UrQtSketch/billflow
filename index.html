@@ -745,19 +745,55 @@
         </section>
       </div>
 
-      <!-- VIEW 4: CUSTOMERS -->
+      <!-- VIEW 4: CUSTOMERS & UDHAAR KHATA -->
       <div class="view" id="view-customers">
         <section class="card panel">
           <div class="panel-head">
             <div>
-              <h2>Customer Directory</h2>
-              <span class="muted">Manage customer records and view individual billing histories</span>
+              <h2>Customer Directory & Udhaar Khata (ग्राहक व उधारी खाता)</h2>
+              <span class="muted">Manage customer records, track outstanding credit ledger, and send WhatsApp payment reminders</span>
             </div>
             <button class="btn primary" id="btn-add-customer">＋ Add Customer</button>
           </div>
 
-          <div class="toolbar">
-            <div class="search-box">
+          <!-- Udhaar Khata KPI Summary Cards -->
+          <div class="khata-kpi-grid" id="khata-kpi-row" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:14px;margin-bottom:18px">
+            <div class="card stat khata-stat-card" style="padding:14px;border-left:4px solid #ef4444;background:var(--panel)">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span class="muted" style="font-size:11px;font-weight:700">TOTAL OUTSTANDING UDHAAR (कुल उधारी)</span>
+                <span style="font-size:18px">📒</span>
+              </div>
+              <div class="value" id="khata-total-pending" style="font-size:22px;color:#ef4444;font-weight:800;margin:6px 0 2px">₹0.00</div>
+              <span class="muted" style="font-size:11.5px">Total uncollected credit balance</span>
+            </div>
+
+            <div class="card stat khata-stat-card" style="padding:14px;border-left:4px solid #f59e0b;background:var(--panel)">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span class="muted" style="font-size:11px;font-weight:700">CUSTOMERS WITH DUE (बकायादार ग्राहक)</span>
+                <span style="font-size:18px">👥</span>
+              </div>
+              <div class="value" id="khata-pending-customers-count" style="font-size:22px;color:#d97706;font-weight:800;margin:6px 0 2px">0</div>
+              <span class="muted" style="font-size:11.5px">Accounts awaiting payment</span>
+            </div>
+
+            <div class="card stat khata-stat-card" style="padding:14px;border-left:4px solid #10b981;background:var(--panel)">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span class="muted" style="font-size:11px;font-weight:700">TOTAL COLLECTED (कुल जमा राशि)</span>
+                <span style="font-size:18px">💵</span>
+              </div>
+              <div class="value" id="khata-total-collected" style="font-size:22px;color:#10b981;font-weight:800;margin:6px 0 2px">₹0.00</div>
+              <span class="muted" style="font-size:11.5px">Settled and paid invoices</span>
+            </div>
+          </div>
+
+          <div class="toolbar" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn btn-sm active" id="tab-cust-all" style="font-weight:700">All Customers (सभी)</button>
+              <button type="button" class="btn btn-sm" id="tab-cust-udhaar" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5;font-weight:700">
+                📒 Udhaar Khata (उधारी खाता) <span id="badge-udhaar-count" style="background:#ef4444;color:#fff;border-radius:10px;padding:1px 6px;font-size:11px;margin-left:4px">0</span>
+              </button>
+            </div>
+            <div class="search-box" style="flex:1;max-width:380px;min-width:240px">
               <span>🔍</span>
               <input type="text" id="customer-search" placeholder="Search customers by name, phone or email...">
             </div>
@@ -1067,6 +1103,11 @@
               </div>
 
               <div class="field">
+                <label>UPI ID / VPA (FOR PAYMENT REMINDERS & QR CODES)</label>
+                <input id="setting-upi-id" placeholder="e.g. deepaksharma@okaxis or 9876543210@upi">
+              </div>
+
+              <div class="field">
                 <label>DATA ISOLATION / PROFILE</label>
                 <div style="display:flex;gap:8px">
                   <select id="settings-profile-select" style="flex:1">
@@ -1226,6 +1267,20 @@
           <div class="card stat" style="padding:12px">
             <span class="muted" style="font-size:11px">OUTSTANDING</span>
             <div class="value" id="history-total-pending" style="font-size:20px;margin:4px 0 0;color:var(--warning)">₹0.00</div>
+          </div>
+        </div>
+
+        <!-- Udhaar Alert & Action Banner (shown when totalPending > 0) -->
+        <div id="history-udhaar-alert-box" style="display:none;margin-bottom:16px;padding:12px 16px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+            <div>
+              <strong style="color:#b91c1c;font-size:14px">⚠️ Outstanding Khata Due (बकाया उधारी): <span id="history-alert-pending-amount">₹0.00</span></strong>
+              <p class="muted" style="margin:2px 0 0;font-size:12px">Payment is pending or partial on this account.</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn btn-sm btn-whatsapp-reminder" id="history-btn-send-reminder" style="background:#25D366;color:#fff;font-weight:700">📲 Send WhatsApp Reminder</button>
+              <button type="button" class="btn btn-sm" id="history-btn-record-payment" style="background:#3b82f6;color:#fff;font-weight:700">💳 Record Payment</button>
+            </div>
           </div>
         </div>
 
@@ -1389,6 +1444,138 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PAYMENT REMINDER & UPI QR (उधारी तकादा व UPI QR) -->
+  <div class="modal-backdrop" id="modal-payment-reminder" style="display:none">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <div>
+          <h3>📲 Customer Payment Reminder & UPI QR</h3>
+          <span class="muted" id="reminder-modal-subtitle" style="font-size:12px">Send 1-Click WhatsApp payment notice with instant UPI QR code</span>
+        </div>
+        <button type="button" class="btn-close" onclick="closeModal('modal-payment-reminder')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="khata-reminder-grid" style="display:grid;grid-template-columns:1fr 1.15fr;gap:20px">
+          <!-- Left: Customer Due Summary & Live Dynamic UPI QR -->
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div class="card" style="padding:14px;background:var(--bg);border:1.5px solid var(--line);border-radius:10px">
+              <span class="muted" style="font-size:11px;font-weight:700">CUSTOMER / ग्राहक</span>
+              <h4 id="reminder-cust-name" style="margin:4px 0 2px;font-size:16px">Rahul Traders</h4>
+              <span class="muted" id="reminder-cust-phone" style="font-size:12.5px">+91 98222 33445</span>
+              <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:12px;font-weight:600">Total Pending Due:</span>
+                <span class="status pending" id="reminder-due-badge" style="font-size:15px;font-weight:800">₹0.00</span>
+              </div>
+            </div>
+
+            <!-- Dynamic UPI QR Code Card -->
+            <div class="upi-qr-card card" style="padding:16px;text-align:center;background:#ffffff;border:1.5px solid #e2e8f0;border-radius:10px">
+              <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">
+                📱 Instant UPI Scan & Pay / तुरंत स्कैन करके भुगतान करें
+              </div>
+              <div style="display:inline-block;padding:8px;background:#fff;border:1px solid #cbd5e1;border-radius:8px">
+                <img id="reminder-upi-qr-img" src="" alt="UPI QR Code" style="width:180px;height:180px;display:block;margin:0 auto" />
+              </div>
+              <div style="margin-top:8px;font-size:11.5px;color:#475569">
+                UPI ID: <strong id="reminder-display-upi-id" style="color:#0284c7">merchant@upi</strong>
+              </div>
+              <div style="font-size:11px;color:#64748b;margin-top:2px">
+                Supports Google Pay, PhonePe, Paytm, BHIM & any UPI app
+              </div>
+            </div>
+
+            <!-- Pending Bills Mini List -->
+            <div>
+              <span class="muted" style="font-size:11px;font-weight:700">PENDING INVOICES / बकाया बिल:</span>
+              <div id="reminder-pending-invoices-list" style="margin-top:6px;display:flex;flex-direction:column;gap:6px;max-height:120px;overflow-y:auto"></div>
+            </div>
+          </div>
+
+          <!-- Right: Formatted WhatsApp Message Preview -->
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <label style="font-size:12px;font-weight:700;color:var(--ink)">💬 WHATSAPP MESSAGE PREVIEW / संदेश का प्रारूप</label>
+              <button type="button" class="btn btn-sm" id="btn-reminder-copy-msg" style="font-size:11px;padding:2px 8px">📋 Copy Text</button>
+            </div>
+
+            <div class="whatsapp-chat-bubble" style="background:#e7f8ee;border:1px solid #bbf7d0;border-radius:8px;padding:14px;color:#14532d;font-size:13px;line-height:1.55;white-space:pre-wrap;font-family:inherit;min-height:220px;max-height:300px;overflow-y:auto" id="reminder-message-preview"></div>
+
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+              <button type="button" class="btn" id="btn-reminder-send-whatsapp" style="background:#25D366;color:#fff;font-weight:800;padding:10px 16px;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px">
+                <span style="font-size:18px">💬</span> Send via WhatsApp (1-Click)
+              </button>
+              <div style="display:flex;gap:8px">
+                <button type="button" class="btn secondary" id="btn-reminder-open-payment" style="flex:1">💳 Record Payment Received</button>
+                <button type="button" class="btn" onclick="closeModal('modal-payment-reminder')" style="flex:0 0 80px">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: RECORD PAYMENT / KHATA SETTLEMENT -->
+  <div class="modal-backdrop" id="modal-record-payment" style="display:none">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <h3>💳 Record Customer Payment / उधारी जमा करें</h3>
+          <span class="muted" style="font-size:12px">Record received payment to clear pending Khata balance</span>
+        </div>
+        <button type="button" class="btn-close" onclick="closeModal('modal-record-payment')">✕</button>
+      </div>
+      <form id="form-record-payment">
+        <input type="hidden" id="settle-customer-id">
+        <div class="modal-body">
+          <div class="card" style="padding:12px;background:var(--bg);border:1px solid var(--line);margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <strong id="settle-customer-name" style="font-size:15px">Customer Name</strong>
+                <div class="muted" id="settle-customer-phone" style="font-size:12px">Phone</div>
+              </div>
+              <div style="text-align:right">
+                <span class="muted" style="font-size:11px">TOTAL DUE</span>
+                <div id="settle-customer-due" style="font-size:16px;font-weight:800;color:#ef4444">₹0.00</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>AMOUNT RECEIVED (₹) *</label>
+            <input type="number" id="settle-amount-input" required min="1" step="any" placeholder="0.00" style="font-size:16px;font-weight:700">
+            <small class="muted">You can enter full balance or partial amount received.</small>
+          </div>
+
+          <div class="field">
+            <label>PAYMENT METHOD *</label>
+            <select id="settle-payment-method">
+              <option value="Cash">Cash (नकद)</option>
+              <option value="UPI">UPI / GPay / PhonePe / Paytm</option>
+              <option value="Bank Transfer">Bank Transfer / NEFT</option>
+              <option value="Card">Card</option>
+              <option value="Cheque">Cheque</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>PAYMENT DATE *</label>
+            <input type="date" id="settle-date-input" required>
+          </div>
+
+          <div class="field" style="margin-bottom:0">
+            <label>NOTE / REMARKS (OPTIONAL)</label>
+            <input type="text" id="settle-note-input" placeholder="e.g. Received via GPay / In cash at counter">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" onclick="closeModal('modal-record-payment')">Cancel</button>
+          <button type="submit" class="btn primary" style="background:#10b981;border-color:#10b981;font-weight:700">✓ Settle & Update Khata</button>
+        </div>
+      </form>
     </div>
   </div>
 

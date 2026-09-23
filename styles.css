@@ -2839,3 +2839,106 @@ body.sidebar-collapsed .main {
     font-size: 12pt;
   }
 }
+
+/* ============================================================ */
+/* UDHAAR KHATA & PAYMENT REMINDER STYLES (उधारी खाता) */
+/* ============================================================ */
+.khata-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.khata-stat-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.khata-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.btn-whatsapp-reminder {
+  background: #25D366 !important;
+  color: #ffffff !important;
+  border: none !important;
+  font-weight: 700 !important;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.btn-whatsapp-reminder:hover {
+  background: #1ebd59 !important;
+  transform: translateY(-1px);
+}
+
+.btn-whatsapp-reminder:active {
+  transform: translateY(0);
+}
+
+.khata-reminder-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 20px;
+}
+
+.upi-qr-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.whatsapp-chat-bubble {
+  position: relative;
+  background: #e7f8ee;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 14px;
+  color: #14532d;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+/* Mobile adjustments for Udhaar Khata */
+@media (max-width: 768px) {
+  .khata-reminder-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  .khata-kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Dark mode overrides for Udhaar Khata */
+[data-theme="dark"] .whatsapp-chat-bubble {
+  background: #064e3b !important;
+  border-color: #047857 !important;
+  color: #a7f3d0 !important;
+}
+
+[data-theme="dark"] .upi-qr-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .upi-qr-card div {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] #tab-cust-udhaar {
+  background: #450a0a !important;
+  color: #fca5a5 !important;
+  border-color: #991b1b !important;
+}
+
+[data-theme="dark"] #history-udhaar-alert-box {
+  background: #450a0a !important;
+  border-color: #991b1b !important;
+}
+
+[data-theme="dark"] #history-udhaar-alert-box strong {
+  color: #fca5a5 !important;
+}
