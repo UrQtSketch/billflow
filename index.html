@@ -180,6 +180,26 @@
           </div>
         </section>
 
+        <!-- Low Stock Alert Banner (Dashboard) -->
+        <section class="card panel low-stock-alert-panel" id="dashboard-low-stock-alert" style="display:none;margin-bottom:20px;border-left:4px solid #ef4444;background:linear-gradient(to right, rgba(239, 68, 68, 0.05), transparent)">
+          <div class="panel-head" style="align-items:flex-start;flex-wrap:wrap;gap:12px">
+            <div style="display:flex;align-items:flex-start;gap:12px">
+              <span style="font-size:26px;line-height:1">📦</span>
+              <div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <h3 style="margin:0;font-size:16px;color:#dc2626;font-weight:700">Low Stock & Reorder Alert (स्टॉक खत्म होने का अलर्ट)</h3>
+                  <span class="tag" id="dashboard-low-stock-count" style="background:#fee2e2;color:#b91c1c;font-weight:700">0 Items Low</span>
+                </div>
+                <p class="muted" style="margin:4px 0 0;font-size:13px">नीचे दिए गए सामान का स्टॉक 10 या उससे कम बचा है। समय पर नया स्टॉक मंगवाएं।</p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-sm" onclick="document.querySelector('.nav button[data-view=products]').click()" style="background:#fef2f2;border-color:#fca5a5;color:#b91c1c;font-weight:600">📦 Manage Inventory</button>
+          </div>
+          <div id="dashboard-low-stock-container" class="low-stock-grid" style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">
+            <!-- Dynamically populated low stock cards -->
+          </div>
+        </section>
+
         <!-- Recent Invoices Table Card -->
         <section class="card panel">
           <div class="panel-head">
@@ -259,6 +279,11 @@
               <div class="field form-full">
                 <label>CUSTOMER ADDRESS</label>
                 <input id="inv-customer-address" placeholder="Billing Address / City">
+              </div>
+
+              <div class="field">
+                <label>CUSTOMER GSTIN (FOR B2B BILLS)</label>
+                <input id="inv-customer-gstin" placeholder="15-digit GSTIN (Optional)">
               </div>
 
               <div class="field">
@@ -710,7 +735,7 @@
             <button class="btn primary" onclick="document.querySelector('.nav button[data-view=create-invoice]').click()">＋ Create Invoice</button>
           </div>
 
-          <div class="toolbar">
+          <div class="toolbar" style="flex-wrap:wrap;gap:10px">
             <div class="search-box">
               <span>🔍</span>
               <input type="text" id="invoices-search" placeholder="Search by Invoice # or Customer name...">
@@ -722,6 +747,7 @@
               <option value="Partial">Partial</option>
               <option value="Draft">Draft</option>
             </select>
+            <button type="button" class="btn btn-sm" id="btn-invoices-gst-report" onclick="window.GstReportController && window.GstReportController.openModal()" style="background:#2563eb;color:#fff;font-weight:700;display:inline-flex;align-items:center;gap:6px">📑 GSTR-1 / CA Report (Excel)</button>
           </div>
 
           <div class="table-container">
@@ -832,7 +858,7 @@
             <button class="btn primary" id="btn-add-product">＋ Add Product / Service</button>
           </div>
 
-          <div class="toolbar">
+          <div class="toolbar" style="flex-wrap:wrap;gap:10px">
             <div class="search-box">
               <span>🔍</span>
               <input type="text" id="product-search" placeholder="Search by item name or SKU...">
@@ -840,6 +866,7 @@
             <select class="filter-select" id="product-category-filter">
               <option value="all">All Categories</option>
             </select>
+            <button type="button" class="btn btn-sm" id="btn-filter-low-stock" style="border:1px solid #fca5a5;color:#b91c1c;background:#fff5f5;font-weight:600;display:inline-flex;align-items:center;gap:6px">⚠️ Low Stock (≤ 10)</button>
           </div>
 
           <div class="table-container">
@@ -936,6 +963,26 @@
             </div>
           </div>
 
+          <!-- Low Stock Alert Banner (Sales Analysis) -->
+          <div class="card low-stock-alert-panel" id="analysis-low-stock-alert" style="display:none;margin-top:20px;padding:16px 18px;border-left:4px solid #f59e0b;background:linear-gradient(to right, rgba(245, 158, 11, 0.06), transparent);border-radius:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:24px">⚠️</span>
+                <div>
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <strong style="color:#d97706;font-size:14px">Inventory Health: Low Stock Warning (स्टॉक रीऑर्डर अलर्ट)</strong>
+                    <span class="tag" id="analysis-low-stock-count" style="background:#fef3c7;color:#b45309;font-weight:700">0 Items</span>
+                  </div>
+                  <span class="muted" style="font-size:12px">कुछ सामानों का स्टॉक 10 या उससे कम बचा है। बिक्री बाधित होने से पहले पुनः स्टॉक करें।</span>
+                </div>
+              </div>
+              <button type="button" class="btn btn-sm" onclick="document.querySelector('.nav button[data-view=products]').click()" style="background:#fffbeb;border-color:#fcd34d;color:#b45309;font-weight:600">⚡ Manage Stock</button>
+            </div>
+            <div id="analysis-low-stock-container" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px">
+              <!-- Dynamically populated low stock pills -->
+            </div>
+          </div>
+
           <!-- Visual Charts Grid Row -->
           <div class="analysis-charts-grid" style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-top:24px">
             <!-- Chart 1: Daily Sales & Revenue Trend -->
@@ -1024,7 +1071,10 @@
                 <h3 style="margin:0;font-size:16px;font-weight:700">📅 Daily Sales & Profit Log (दैनिक बिक्री का विवरण)</h3>
                 <span class="muted" style="font-size:12px">Day-by-day record of total sales, costs and profit margin</span>
               </div>
-              <button type="button" class="btn btn-sm" onclick="window.exportSalesAnalysisCSV()">📥 Export Report (CSV)</button>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <button type="button" class="btn btn-sm" id="btn-analysis-gst-report" onclick="window.GstReportController && window.GstReportController.openModal()" style="background:#2563eb;color:#fff;font-weight:700;display:inline-flex;align-items:center;gap:6px">📑 Monthly GST & CA Report</button>
+                <button type="button" class="btn btn-sm" onclick="window.exportSalesAnalysisCSV()">📥 Export Report (CSV)</button>
+              </div>
             </div>
 
             <div class="table-container">
@@ -1229,6 +1279,11 @@
             <div class="field form-full">
               <label>ADDRESS (OPTIONAL)</label>
               <textarea id="cust-address" placeholder="Billing address / city / state"></textarea>
+            </div>
+
+            <div class="field form-full">
+              <label>GSTIN / TAX ID (FOR B2B INVOICES)</label>
+              <input id="cust-gstin" placeholder="e.g. 07AAAAA0000A1Z5 (15-digit GSTIN)">
             </div>
           </div>
         </div>
@@ -1576,6 +1631,89 @@
           <button type="submit" class="btn primary" style="background:#10b981;border-color:#10b981;font-weight:700">✓ Settle & Update Khata</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: MONTHLY GST & CA REPORT (GSTR-1 READY) -->
+  <div class="modal-backdrop" id="modal-gst-report" style="display:none">
+    <div class="modal-dialog modal-xl" style="max-width:960px">
+      <div class="modal-header">
+        <div>
+          <h3 style="display:flex;align-items:center;gap:8px">
+            <span>📑 Monthly GST & CA Report (GSTR-1 Ready)</span>
+            <span class="tag" style="background:#ecfdf5;color:#047857;font-weight:700">CA READY</span>
+          </h3>
+          <span class="muted" style="font-size:12px">अपने सीए (Chartered Accountant) को डायरेक्ट भेजने हेतु 1-क्लिक मासिक जीएसटी एक्सेल/सीएसवी रिपोर्ट</span>
+        </div>
+        <button type="button" class="btn-close" onclick="closeModal('modal-gst-report')">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Controls Bar -->
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;padding:12px 16px;background:var(--bg);border:1px solid var(--line);border-radius:10px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <label for="gst-report-month-input" style="font-size:13px;font-weight:700;margin:0">SELECT MONTH (महीना चुनें):</label>
+            <input type="month" id="gst-report-month-input" style="padding:6px 12px;border:1px solid var(--line);border-radius:6px;font-weight:600">
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="muted" style="font-size:12px">Business GSTIN:</span>
+            <span class="tag" id="gst-modal-business-gstin" style="background:#eff6ff;color:#1d4ed8;font-weight:700">GSTIN: —</span>
+          </div>
+        </div>
+
+        <!-- 6-Metric KPI Summary Grid -->
+        <div class="gst-kpi-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px">
+          <div class="card" style="padding:12px 14px;border:1px solid var(--line);background:var(--panel);border-radius:8px">
+            <span class="muted" style="font-size:11px;font-weight:700">TOTAL INVOICES</span>
+            <div id="gst-kpi-invoices" style="font-size:18px;font-weight:800;margin-top:2px">0</div>
+          </div>
+          <div class="card" style="padding:12px 14px;border:1px solid var(--line);background:var(--panel);border-radius:8px">
+            <span class="muted" style="font-size:11px;font-weight:700">TAXABLE TURNOVER</span>
+            <div id="gst-kpi-taxable" style="font-size:18px;font-weight:800;color:var(--ink);margin-top:2px">₹0.00</div>
+          </div>
+          <div class="card" style="padding:12px 14px;border:1px solid var(--line);background:var(--panel);border-radius:8px">
+            <span class="muted" style="font-size:11px;font-weight:700">CENTRAL GST (CGST)</span>
+            <div id="gst-kpi-cgst" style="font-size:18px;font-weight:800;color:#2563eb;margin-top:2px">₹0.00</div>
+          </div>
+          <div class="card" style="padding:12px 14px;border:1px solid var(--line);background:var(--panel);border-radius:8px">
+            <span class="muted" style="font-size:11px;font-weight:700">STATE GST (SGST)</span>
+            <div id="gst-kpi-sgst" style="font-size:18px;font-weight:800;color:#7c3aed;margin-top:2px">₹0.00</div>
+          </div>
+          <div class="card" style="padding:12px 14px;border:1px solid var(--line);background:var(--panel);border-radius:8px">
+            <span class="muted" style="font-size:11px;font-weight:700">TOTAL GST LIABILITY</span>
+            <div id="gst-kpi-total-tax" style="font-size:18px;font-weight:800;color:#059669;margin-top:2px">₹0.00</div>
+          </div>
+          <div class="card" style="padding:12px 14px;border:1px solid var(--line);background:var(--panel);border-radius:8px">
+            <span class="muted" style="font-size:11px;font-weight:700">GROSS SALES</span>
+            <div id="gst-kpi-gross" style="font-size:18px;font-weight:800;color:var(--p);margin-top:2px">₹0.00</div>
+          </div>
+        </div>
+
+        <!-- Filter Tab Buttons -->
+        <div class="gst-tab-bar" style="display:flex;gap:8px;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:12px;overflow-x:auto">
+          <button type="button" class="btn btn-sm gst-tab-btn active" data-tab="all" style="font-weight:600">Overview / All Invoices</button>
+          <button type="button" class="btn btn-sm gst-tab-btn" data-tab="b2b" style="font-weight:600">B2B (With GSTIN)</button>
+          <button type="button" class="btn btn-sm gst-tab-btn" data-tab="b2c" style="font-weight:600">B2C (Retail / Consumer)</button>
+          <button type="button" class="btn btn-sm gst-tab-btn" data-tab="hsn" style="font-weight:600">HSN / Item Summary</button>
+        </div>
+
+        <!-- Dynamic Preview Table -->
+        <div id="gst-report-table-container" class="table-container" style="max-height:320px;overflow-y:auto;border:1px solid var(--line);border-radius:8px">
+          <!-- Dynamically populated table -->
+        </div>
+      </div>
+
+      <div class="modal-footer" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn btn-sm" id="btn-copy-ca-summary" style="display:inline-flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid #cbd5e1;color:#1e293b;font-weight:700">
+            <span>📋</span> Copy WhatsApp / CA Summary
+          </button>
+          <button type="button" class="btn btn-sm" id="btn-export-gstr1-csv" style="display:inline-flex;align-items:center;gap:6px;background:#16a34a;border-color:#16a34a;color:#fff;font-weight:700">
+            <span>📥</span> Download GSTR-1 Excel / CSV
+          </button>
+        </div>
+        <button type="button" class="btn btn-sm" onclick="closeModal('modal-gst-report')">Close</button>
+      </div>
     </div>
   </div>
 

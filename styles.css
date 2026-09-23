@@ -2942,3 +2942,148 @@ body.sidebar-collapsed .main {
 [data-theme="dark"] #history-udhaar-alert-box strong {
   color: #fca5a5 !important;
 }
+
+/* ==========================================================================
+   📦 LOW STOCK ALERT & REORDER SYSTEM
+   ========================================================================== */
+.low-stock-alert-panel {
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.08);
+}
+
+.low-stock-item-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.low-stock-item-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  border-color: #fca5a5;
+}
+
+.low-stock-badge-out {
+  background: #fee2e2;
+  color: #b91c1c;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.low-stock-badge-critical {
+  background: #ffedd5;
+  color: #c2410c;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.low-stock-badge-warning {
+  background: #fef3c7;
+  color: #b45309;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.low-stock-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.low-stock-pill:hover {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+/* ==========================================================================
+   📑 MONTHLY GST & CA REPORT MODAL
+   ========================================================================== */
+.gst-tab-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.gst-tab-btn:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.gst-tab-btn.active {
+  background: var(--p);
+  color: #fff;
+  border-color: var(--p);
+}
+
+.gst-preview-table th {
+  background: var(--bg);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.gst-preview-table td {
+  font-size: 12px;
+}
+
+/* Dark mode overrides for GST & Low Stock */
+[data-theme="dark"] #dashboard-low-stock-alert {
+  background: linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent) !important;
+  border-color: #b91c1c !important;
+}
+
+[data-theme="dark"] #analysis-low-stock-alert {
+  background: linear-gradient(to right, rgba(245, 158, 11, 0.15), transparent) !important;
+  border-color: #d97706 !important;
+}
+
+[data-theme="dark"] .low-stock-item-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .low-stock-pill {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .gst-preview-table th {
+  background: #1e293b !important;
+}
+

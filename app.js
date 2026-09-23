@@ -743,6 +743,656 @@
           `;
         }).join('');
       }
+
+      if (typeof LowStockController !== 'undefined') {
+        LowStockController.render();
+      }
+    }
+  };
+
+  // --- 📦 LOW STOCK & REORDER ALERT CONTROLLER ---
+  const LowStockController = {
+    init() {
+      // Any low stock global event handlers
+    },
+
+    getLowStockItems() {
+      const products = Store.getProducts();
+      return products
+        .filter(p => p.type === 'product' && (Number(p.stock) || 0) <= 10)
+        .map(p => {
+          const stock = Number(p.stock) || 0;
+          let status = 'low';
+          let badgeText = `${stock} left (Low)`;
+          let badgeClass = 'low-stock-badge-warning';
+
+          if (stock <= 0) {
+            status = 'out';
+            badgeText = 'Out of Stock (0)';
+            badgeClass = 'low-stock-badge-out';
+          } else if (stock <= 5) {
+            status = 'critical';
+            badgeText = `${stock} left (Critical)`;
+            badgeClass = 'low-stock-badge-critical';
+          }
+
+          return {
+            ...p,
+            stock,
+            status,
+            badgeText,
+            badgeClass
+          };
+        })
+        .sort((a, b) => a.stock - b.stock);
+    },
+
+    render() {
+      this.renderDashboard();
+      this.renderAnalysis();
+    },
+
+    renderDashboard() {
+      const alertEl = document.getElementById('dashboard-low-stock-alert');
+      const countEl = document.getElementById('dashboard-low-stock-count');
+      const containerEl = document.getElementById('dashboard-low-stock-container');
+      if (!alertEl || !countEl || !containerEl) return;
+
+      const items = this.getLowStockItems();
+      if (items.length === 0) {
+        alertEl.style.display = 'none';
+        return;
+      }
+
+      alertEl.style.display = 'block';
+      countEl.textContent = `${items.length} Item${items.length > 1 ? 's' : ''} Low / Reorder`;
+
+      containerEl.innerHTML = items.slice(0, 8).map(it => `
+        <div class="low-stock-item-card">
+          <div style="flex:1;min-width:0;padding-right:8px">
+            <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              ${Utils.escapeHtml(it.name)}
+            </div>
+            <div class="muted" style="font-size:11px">
+              ${Utils.escapeHtml(it.sku || it.category || 'General')}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="${it.badgeClass}">${it.badgeText}</span>
+            <button type="button" class="btn btn-sm" onclick="window.editProduct('${it.id}')" style="padding:3px 8px;font-size:11px;font-weight:600">⚡ Restock</button>
+          </div>
+        </div>
+      `).join('');
+    },
+
+    renderAnalysis() {
+      const alertEl = document.getElementById('analysis-low-stock-alert');
+      const countEl = document.getElementById('analysis-low-stock-count');
+      const containerEl = document.getElementById('analysis-low-stock-container');
+      if (!alertEl || !countEl || !containerEl) return;
+
+      const items = this.getLowStockItems();
+      if (items.length === 0) {
+        alertEl.style.display = 'none';
+        return;
+      }
+
+      alertEl.style.display = 'block';
+      countEl.textContent = `${items.length} Item${items.length > 1 ? 's' : ''}`;
+
+      containerEl.innerHTML = items.map(it => `
+        <div class="low-stock-pill" onclick="window.editProduct('${it.id}')" title="Click to update stock">
+          <strong>${Utils.escapeHtml(it.name)}</strong>
+          <span class="${it.badgeClass}">${it.badgeText}</span>
+          <span style="font-size:11px;color:var(--p);font-weight:700">⚡ Edit</span>
+        </div>
+      `).join('');
+    }
+  };
+
+  // --- 📑 MONTHLY GST & CA REPORT CONTROLLER (GSTR-1 READY) ---
+  const GstReportController = {
+    activeMonth: '',
+    activeTab: 'all',
+
+    init() {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      this.activeMonth = `${yyyy}-${mm}`;
+
+      const monthInput = document.getElementById('gst-report-month-input');
+      if (monthInput) {
+        monthInput.value = this.activeMonth;
+        monthInput.addEventListener('change', (e) => {
+          if (e.target.value) {
+            this.activeMonth = e.target.value;
+            this.render();
+          }
+        });
+      }
+
+      document.querySelectorAll('.gst-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tab = btn.getAttribute('data-tab') || 'all';
+          this.setTab(tab);
+        });
+      });
+
+      const btnExport = document.getElementById('btn-export-gstr1-csv');
+      if (btnExport) {
+        btnExport.addEventListener('click', () => this.exportGstr1Csv());
+      }
+
+      const btnCopySummary = document.getElementById('btn-copy-ca-summary');
+      if (btnCopySummary) {
+        btnCopySummary.addEventListener('click', () => this.copyCaSummary());
+      }
+
+      const btnInvoicesGst = document.getElementById('btn-invoices-gst-report');
+      if (btnInvoicesGst) {
+        btnInvoicesGst.addEventListener('click', () => this.openModal());
+      }
+
+      const btnAnalysisGst = document.getElementById('btn-analysis-gst-report');
+      if (btnAnalysisGst) {
+        btnAnalysisGst.addEventListener('click', () => this.openModal());
+      }
+    },
+
+    setTab(tab) {
+      this.activeTab = tab;
+      document.querySelectorAll('.gst-tab-btn').forEach(btn => {
+        if (btn.getAttribute('data-tab') === tab) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+      this.renderTable();
+    },
+
+    openModal(month = null) {
+      if (month) {
+        this.activeMonth = month;
+      } else if (!this.activeMonth) {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        this.activeMonth = `${yyyy}-${mm}`;
+      }
+
+      const monthInput = document.getElementById('gst-report-month-input');
+      if (monthInput) monthInput.value = this.activeMonth;
+
+      this.render();
+      Modal.open('modal-gst-report');
+    },
+
+    computeMonthGstData(yearMonth) {
+      const invoices = Store.getInvoices();
+      const customers = Store.getCustomers();
+      const settings = Store.getSettings();
+
+      const monthInvoices = invoices.filter(inv => {
+        const invDate = String(inv.date || '').split('T')[0];
+        return invDate.startsWith(yearMonth);
+      }).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      let totalTaxable = 0;
+      let totalCgst = 0;
+      let totalSgst = 0;
+      let totalIgst = 0;
+      let totalTax = 0;
+      let grossSales = 0;
+
+      const processedInvoices = [];
+      const b2bInvoices = [];
+      const b2cInvoices = [];
+      const hsnMap = {};
+
+      monthInvoices.forEach(inv => {
+        const cust = customers.find(c => c.id === inv.customerId || c.name === inv.customerName);
+        const gstin = (inv.customerGstin || (cust && cust.gstin) || '').trim().toUpperCase();
+        const isB2B = Boolean(gstin && gstin.length >= 10);
+
+        const subtotal = Number(inv.subtotal) || 0;
+        const discount = Number(inv.discountAmount) || 0;
+        let taxable = Math.max(0, subtotal - discount);
+        const taxRate = Number(inv.taxRate) || 0;
+        let taxAmt = Number(inv.taxAmount) || 0;
+        const grandTotal = Number(inv.grandTotal) || 0;
+
+        if (taxable === 0 && grandTotal > 0 && taxAmt > 0) {
+          taxable = Math.max(0, grandTotal - taxAmt);
+        } else if (taxAmt === 0 && taxRate > 0 && taxable > 0) {
+          taxAmt = (taxable * taxRate) / 100;
+        }
+
+        const cgst = taxAmt / 2;
+        const sgst = taxAmt / 2;
+        const igst = 0;
+
+        totalTaxable += taxable;
+        totalCgst += cgst;
+        totalSgst += sgst;
+        totalIgst += igst;
+        totalTax += taxAmt;
+        grossSales += grandTotal;
+
+        const row = {
+          ...inv,
+          customerGstin: gstin,
+          isB2B,
+          taxable,
+          taxRate,
+          taxAmt,
+          cgst,
+          sgst,
+          igst,
+          grandTotal
+        };
+
+        processedInvoices.push(row);
+        if (isB2B) {
+          b2bInvoices.push(row);
+        } else {
+          b2cInvoices.push(row);
+        }
+
+        if (Array.isArray(inv.items)) {
+          inv.items.forEach(it => {
+            const hsnKey = (it.sku || it.name || 'GENERAL').toUpperCase();
+            if (!hsnMap[hsnKey]) {
+              hsnMap[hsnKey] = {
+                sku: it.sku || '—',
+                name: it.name || 'General Item',
+                totalQty: 0,
+                taxableValue: 0,
+                taxRate: taxRate,
+                cgst: 0,
+                sgst: 0,
+                totalTax: 0,
+                totalValue: 0
+              };
+            }
+            const itQty = Number(it.qty) || 1;
+            const itTotal = Number(it.total) || 0;
+            const itTax = taxRate > 0 ? (itTotal * taxRate) / 100 : 0;
+
+            hsnMap[hsnKey].totalQty += itQty;
+            hsnMap[hsnKey].taxableValue += itTotal;
+            hsnMap[hsnKey].cgst += itTax / 2;
+            hsnMap[hsnKey].sgst += itTax / 2;
+            hsnMap[hsnKey].totalTax += itTax;
+            hsnMap[hsnKey].totalValue += (itTotal + itTax);
+          });
+        }
+      });
+
+      const hsnItems = Object.values(hsnMap);
+
+      return {
+        month: yearMonth,
+        invoices: processedInvoices,
+        b2bInvoices,
+        b2cInvoices,
+        hsnItems,
+        totals: {
+          totalInvoices: monthInvoices.length,
+          totalTaxable,
+          totalCgst,
+          totalSgst,
+          totalIgst,
+          totalTax,
+          grossSales,
+          b2bCount: b2bInvoices.length,
+          b2cCount: b2cInvoices.length
+        },
+        settings
+      };
+    },
+
+    render() {
+      const data = this.computeMonthGstData(this.activeMonth);
+      const settings = data.settings;
+      const currency = settings.currency || '₹';
+
+      const gstinEl = document.getElementById('gst-modal-business-gstin');
+      if (gstinEl) {
+        gstinEl.textContent = settings.gstin ? `GSTIN: ${settings.gstin}` : 'GSTIN: Not Set (Add in Settings)';
+        gstinEl.style.background = settings.gstin ? '#eff6ff' : '#fef2f2';
+        gstinEl.style.color = settings.gstin ? '#1d4ed8' : '#b91c1c';
+      }
+
+      const setCard = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+      };
+
+      setCard('gst-kpi-invoices', data.totals.totalInvoices);
+      setCard('gst-kpi-taxable', Utils.formatCurrency(data.totals.totalTaxable, currency));
+      setCard('gst-kpi-cgst', Utils.formatCurrency(data.totals.totalCgst, currency));
+      setCard('gst-kpi-sgst', Utils.formatCurrency(data.totals.totalSgst, currency));
+      setCard('gst-kpi-total-tax', Utils.formatCurrency(data.totals.totalTax, currency));
+      setCard('gst-kpi-gross', Utils.formatCurrency(data.totals.grossSales, currency));
+
+      this.renderTable(data);
+    },
+
+    renderTable(cachedData = null) {
+      const data = cachedData || this.computeMonthGstData(this.activeMonth);
+      const container = document.getElementById('gst-report-table-container');
+      if (!container) return;
+
+      const currency = data.settings.currency || '₹';
+
+      if (this.activeTab === 'all' || this.activeTab === 'b2b' || this.activeTab === 'b2c') {
+        let list = data.invoices;
+        if (this.activeTab === 'b2b') list = data.b2bInvoices;
+        if (this.activeTab === 'b2c') list = data.b2cInvoices;
+
+        if (list.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state" style="padding:28px 16px;text-align:center">
+              <span style="font-size:32px">🧾</span>
+              <h4 style="margin:8px 0 4px">No invoices found for ${this.activeMonth}</h4>
+              <p class="muted" style="margin:0;font-size:12px">No bills matching this filter in selected period.</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = `
+          <table class="invoice-list gst-preview-table">
+            <thead>
+              <tr>
+                <th>Invoice #</th>
+                <th>Date</th>
+                <th>Customer Name</th>
+                <th>Type</th>
+                <th>Customer GSTIN</th>
+                <th>Taxable</th>
+                <th>GST Rate</th>
+                <th>CGST</th>
+                <th>SGST</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(inv => `
+                <tr>
+                  <td><strong>#${Utils.escapeHtml(inv.invoiceNumber)}</strong></td>
+                  <td>${Utils.formatDate(inv.date)}</td>
+                  <td>${Utils.escapeHtml(inv.customerName || 'Retail Customer')}</td>
+                  <td>
+                    ${inv.isB2B
+                      ? '<span class="status" style="background:#eff6ff;color:#1d4ed8;font-weight:700">B2B</span>'
+                      : '<span class="status" style="background:#f3f4f6;color:#475569">B2C</span>'
+                    }
+                  </td>
+                  <td><code>${Utils.escapeHtml(inv.customerGstin || '—')}</code></td>
+                  <td>${Utils.formatCurrency(inv.taxable, currency)}</td>
+                  <td>${inv.taxRate || 0}%</td>
+                  <td>${Utils.formatCurrency(inv.cgst, currency)}</td>
+                  <td>${Utils.formatCurrency(inv.sgst, currency)}</td>
+                  <td><strong>${Utils.formatCurrency(inv.grandTotal, currency)}</strong></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } else if (this.activeTab === 'hsn') {
+        const hsnList = data.hsnItems;
+        if (hsnList.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state" style="padding:28px 16px;text-align:center">
+              <span style="font-size:32px">📦</span>
+              <h4 style="margin:8px 0 4px">No product breakdown available</h4>
+              <p class="muted" style="margin:0;font-size:12px">No line items recorded for this month.</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = `
+          <table class="invoice-list gst-preview-table">
+            <thead>
+              <tr>
+                <th>HSN / Code</th>
+                <th>Description</th>
+                <th>Qty Sold</th>
+                <th>Taxable Value</th>
+                <th>Rate</th>
+                <th>CGST</th>
+                <th>SGST</th>
+                <th>Total Tax</th>
+                <th>Total Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${hsnList.map(it => `
+                <tr>
+                  <td><code>${Utils.escapeHtml(it.sku)}</code></td>
+                  <td><strong>${Utils.escapeHtml(it.name)}</strong></td>
+                  <td>${it.totalQty}</td>
+                  <td>${Utils.formatCurrency(it.taxableValue, currency)}</td>
+                  <td>${it.taxRate}%</td>
+                  <td>${Utils.formatCurrency(it.cgst, currency)}</td>
+                  <td>${Utils.formatCurrency(it.sgst, currency)}</td>
+                  <td>${Utils.formatCurrency(it.totalTax, currency)}</td>
+                  <td><strong>${Utils.formatCurrency(it.totalValue, currency)}</strong></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+    },
+
+    exportGstr1Csv() {
+      const data = this.computeMonthGstData(this.activeMonth);
+      const settings = data.settings;
+      const bizName = settings.businessName || 'Business';
+      const bizGstin = settings.gstin || 'NOT CONFIGURED';
+
+      const escapeCsv = (str) => {
+        const val = String(str !== undefined && str !== null ? str : '').replace(/"/g, '""');
+        return `"${val}"`;
+      };
+
+      const rows = [];
+
+      // Section 1: Business and Filing Details
+      rows.push(['GSTR-1 MONTHLY TAX REPORT (CA & GST READY)']);
+      rows.push(['Business Name', bizName]);
+      rows.push(['Business GSTIN', bizGstin]);
+      rows.push(['Return Period (Month)', this.activeMonth]);
+      rows.push(['Generated On', new Date().toLocaleString()]);
+      rows.push(['Software', 'BillFlow Universal Invoicing']);
+      rows.push([]);
+
+      // Section 2: Executive Tax Summary
+      rows.push(['EXECUTIVE GST TAX LIABILITY SUMMARY']);
+      rows.push(['Total Invoices Issued', data.totals.totalInvoices]);
+      rows.push(['Total Taxable Turnover (INR)', data.totals.totalTaxable.toFixed(2)]);
+      rows.push(['Central Tax (CGST) (INR)', data.totals.totalCgst.toFixed(2)]);
+      rows.push(['State Tax (SGST) (INR)', data.totals.totalSgst.toFixed(2)]);
+      rows.push(['Integrated Tax (IGST) (INR)', data.totals.totalIgst.toFixed(2)]);
+      rows.push(['Total GST Liability (INR)', data.totals.totalTax.toFixed(2)]);
+      rows.push(['Gross Invoice Sales (INR)', data.totals.grossSales.toFixed(2)]);
+      rows.push(['B2B Invoices Count', data.totals.b2bCount]);
+      rows.push(['B2C Invoices Count', data.totals.b2cCount]);
+      rows.push([]);
+
+      // Section 3: Table 4 - B2B Invoices
+      rows.push(['TABLE 4: B2B INVOICES (TAX INVOICES TO REGISTERED PERSONS)']);
+      rows.push([
+        'Invoice Number',
+        'Invoice Date',
+        'Customer Name',
+        'Recipient GSTIN',
+        'Place Of Supply',
+        'Reverse Charge',
+        'Applicable % of Tax Rate',
+        'Rate (%)',
+        'Taxable Value (INR)',
+        'Central Tax CGST (INR)',
+        'State Tax SGST (INR)',
+        'Integrated Tax IGST (INR)',
+        'Invoice Total (INR)'
+      ]);
+
+      if (data.b2bInvoices.length === 0) {
+        rows.push(['No B2B Invoices for this month', '', '', '', '', '', '', '', '', '', '', '', '']);
+      } else {
+        data.b2bInvoices.forEach(inv => {
+          rows.push([
+            inv.invoiceNumber,
+            inv.date,
+            inv.customerName || 'N/A',
+            inv.customerGstin || '',
+            settings.address || 'Delhi',
+            'N',
+            '100',
+            inv.taxRate || 0,
+            inv.taxable.toFixed(2),
+            inv.cgst.toFixed(2),
+            inv.sgst.toFixed(2),
+            inv.igst.toFixed(2),
+            inv.grandTotal.toFixed(2)
+          ]);
+        });
+      }
+      rows.push([]);
+
+      // Section 4: Table 7 - B2C Small Invoices
+      rows.push(['TABLE 7: B2C INVOICES (CONSUMER / RETAIL SUPPLIES)']);
+      rows.push([
+        'Invoice Number',
+        'Invoice Date',
+        'Customer Name',
+        'Type',
+        'Rate (%)',
+        'Taxable Value (INR)',
+        'Central Tax CGST (INR)',
+        'State Tax SGST (INR)',
+        'Invoice Total (INR)',
+        'Payment Status'
+      ]);
+
+      if (data.b2cInvoices.length === 0) {
+        rows.push(['No B2C Invoices for this month', '', '', '', '', '', '', '', '', '']);
+      } else {
+        data.b2cInvoices.forEach(inv => {
+          rows.push([
+            inv.invoiceNumber,
+            inv.date,
+            inv.customerName || 'Retail Customer',
+            'OE (Other than E-Commerce)',
+            inv.taxRate || 0,
+            inv.taxable.toFixed(2),
+            inv.cgst.toFixed(2),
+            inv.sgst.toFixed(2),
+            inv.grandTotal.toFixed(2),
+            inv.paymentStatus || 'Paid'
+          ]);
+        });
+      }
+      rows.push([]);
+
+      // Section 5: Table 12 - HSN / Item-wise Summary
+      rows.push(['TABLE 12: HSN-WISE SUMMARY OF OUTWARD SUPPLIES']);
+      rows.push([
+        'HSN / SKU',
+        'Description',
+        'UQC (Unit)',
+        'Total Quantity',
+        'Total Taxable Value (INR)',
+        'Rate (%)',
+        'Central Tax CGST (INR)',
+        'State Tax SGST (INR)',
+        'Total Tax Amount (INR)',
+        'Total Value (INR)'
+      ]);
+
+      if (data.hsnItems.length === 0) {
+        rows.push(['No items recorded for this month', '', '', '', '', '', '', '', '', '']);
+      } else {
+        data.hsnItems.forEach(it => {
+          rows.push([
+            it.sku,
+            it.name,
+            'NOS',
+            it.totalQty,
+            it.taxableValue.toFixed(2),
+            it.taxRate,
+            it.cgst.toFixed(2),
+            it.sgst.toFixed(2),
+            it.totalTax.toFixed(2),
+            it.totalValue.toFixed(2)
+          ]);
+        });
+      }
+
+      const csvContent = rows
+        .map(r => r.map(escapeCsv).join(','))
+        .join('\r\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const safeBiz = (bizName || 'Business').replace(/[^a-zA-Z0-9]/g, '_');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `GSTR1_CA_Report_${safeBiz}_${this.activeMonth}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      Toast.show(`GSTR-1 Excel/CSV Report for ${this.activeMonth} downloaded!`, 'success');
+    },
+
+    copyCaSummary() {
+      const data = this.computeMonthGstData(this.activeMonth);
+      const settings = data.settings;
+      const currency = settings.currency || '₹';
+
+      const summaryText =
+`📑 GST & Tax Summary Report — ${this.activeMonth}
+Business: ${settings.businessName || 'Business'}
+GSTIN: ${settings.gstin || 'Not configured'}
+------------------------------------------------
+• Total Invoices: ${data.totals.totalInvoices}
+• Gross Total Sales: ${Utils.formatCurrency(data.totals.grossSales, currency)}
+• Taxable Turnover: ${Utils.formatCurrency(data.totals.totalTaxable, currency)}
+• Central GST (CGST): ${Utils.formatCurrency(data.totals.totalCgst, currency)}
+• State GST (SGST): ${Utils.formatCurrency(data.totals.totalSgst, currency)}
+• Total GST Collected: ${Utils.formatCurrency(data.totals.totalTax, currency)}
+• B2B Bills (With GSTIN): ${data.totals.b2bCount}
+• B2C Bills (Retail): ${data.totals.b2cCount}
+------------------------------------------------
+(GSTR-1 Ready file exported from BillFlow)`;
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(summaryText).then(() => {
+          Toast.show('📋 CA Summary copied to clipboard! Ready to paste on WhatsApp.', 'success');
+        }).catch(() => {
+          this.fallbackCopy(summaryText);
+        });
+      } else {
+        this.fallbackCopy(summaryText);
+      }
+    },
+
+    fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      Toast.show('📋 CA Summary copied to clipboard!', 'success');
     }
   };
 
@@ -898,6 +1548,10 @@
 
       // 6. Render Daily Sales Log Table
       this.renderDailyLogTable(analyticsData.dailyTrend || [], currency);
+
+      if (typeof LowStockController !== 'undefined') {
+        LowStockController.render();
+      }
     },
 
     computeLocalAnalytics(range, currency) {
@@ -1447,6 +2101,7 @@
   // --- PRODUCT & SERVICE CONTROLLER ---
   const ProductController = {
     editingId: null,
+    filterLowStockOnly: false,
     init() {
       const searchInput = document.getElementById('product-search');
       if (searchInput) {
@@ -1460,6 +2115,23 @@
       const btnAdd = document.getElementById('btn-add-product');
       if (btnAdd) {
         btnAdd.addEventListener('click', () => this.openAddModal());
+      }
+
+      const btnLowStockFilter = document.getElementById('btn-filter-low-stock');
+      if (btnLowStockFilter) {
+        btnLowStockFilter.addEventListener('click', () => {
+          this.filterLowStockOnly = !this.filterLowStockOnly;
+          if (this.filterLowStockOnly) {
+            btnLowStockFilter.style.background = '#dc2626';
+            btnLowStockFilter.style.color = '#fff';
+            btnLowStockFilter.textContent = '✓ Showing Low Stock (≤ 10)';
+          } else {
+            btnLowStockFilter.style.background = '#fff5f5';
+            btnLowStockFilter.style.color = '#b91c1c';
+            btnLowStockFilter.textContent = '⚠️ Low Stock (≤ 10)';
+          }
+          this.renderList();
+        });
       }
 
       const form = document.getElementById('form-product');
@@ -1504,11 +2176,15 @@
       const filtered = products.filter(p => {
         const matchesQuery = (p.name || '').toLowerCase().includes(query) || (p.sku || '').toLowerCase().includes(query);
         const matchesCat = cat === 'all' || p.category === cat;
-        return matchesQuery && matchesCat;
+        const matchesLowStock = !this.filterLowStockOnly || (p.type === 'product' && (Number(p.stock) || 0) <= 10);
+        return matchesQuery && matchesCat && matchesLowStock;
       });
 
       if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><div class="empty-state-icon">▣</div><h3>No products or services found</h3><p>Click "+ Add Product / Service" to add items to your catalog.</p></td></tr>`;
+        const emptyMsg = this.filterLowStockOnly
+          ? 'No low stock items found! All products have more than 10 units in stock.'
+          : 'Click "+ Add Product / Service" to add items to your catalog.';
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><div class="empty-state-icon">▣</div><h3>No products found</h3><p>${emptyMsg}</p></td></tr>`;
         return;
       }
 
@@ -1519,8 +2195,15 @@
           : `<span class="status" style="background:#ecfdf5;color:#047857">Product</span>`;
 
         let stockDisplay = isService ? '<span class="muted">—</span>' : `${p.stock || 0}`;
-        if (!isService && (p.stock || 0) <= 5) {
-          stockDisplay = `<span class="status pending" title="Low Stock">${p.stock || 0} (Low)</span>`;
+        if (!isService) {
+          const s = Number(p.stock) || 0;
+          if (s <= 0) {
+            stockDisplay = `<span class="status danger" style="background:#fee2e2;color:#b91c1c;font-weight:700" title="Out of Stock">0 (Out of Stock)</span>`;
+          } else if (s <= 5) {
+            stockDisplay = `<span class="status danger" style="background:#ffedd5;color:#c2410c;font-weight:700" title="Critical Stock">${s} (Critical)</span>`;
+          } else if (s <= 10) {
+            stockDisplay = `<span class="status pending" style="background:#fef3c7;color:#b45309;font-weight:700" title="Low Stock">${s} (Low)</span>`;
+          }
         }
 
         return `
@@ -1608,6 +2291,7 @@
               this.renderList();
               InvoiceController.populateProductDropdowns();
               if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
+              if (typeof LowStockController !== 'undefined') LowStockController.render();
               return;
             }
           } catch (err) {
@@ -1634,6 +2318,7 @@
               this.renderList();
               InvoiceController.populateProductDropdowns();
               if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
+              if (typeof LowStockController !== 'undefined') LowStockController.render();
               return;
             }
           } catch (err) {
@@ -1659,6 +2344,7 @@
       this.renderList();
       InvoiceController.populateProductDropdowns();
       if (typeof SalesAnalysisController !== 'undefined') SalesAnalysisController.render();
+      if (typeof LowStockController !== 'undefined') LowStockController.render();
     },
     async delete(id) {
       const products = Store.getProducts();
@@ -1679,6 +2365,7 @@
         Toast.show('Item deleted from catalog', 'success');
         this.renderList();
         InvoiceController.populateProductDropdowns();
+        if (typeof LowStockController !== 'undefined') LowStockController.render();
       }
     }
   };
@@ -1753,7 +2440,10 @@
 
         return `
           <tr>
-            <td><strong>${Utils.escapeHtml(c.name)}</strong></td>
+            <td>
+              <strong>${Utils.escapeHtml(c.name)}</strong>
+              ${c.gstin ? `<div class="muted" style="font-size:11px">GSTIN: <code>${Utils.escapeHtml(c.gstin)}</code></div>` : ''}
+            </td>
             <td>${Utils.escapeHtml(c.phone || '—')}</td>
             <td>${Utils.escapeHtml(c.email || '—')}</td>
             <td><small class="muted">${Utils.escapeHtml(c.address || '—')}</small></td>
@@ -1788,6 +2478,8 @@
       this.editingId = null;
       document.getElementById('modal-customer-title').textContent = 'Add Customer';
       document.getElementById('form-customer').reset();
+      const gstinEl = document.getElementById('cust-gstin');
+      if (gstinEl) gstinEl.value = '';
       Modal.open('modal-customer');
     },
     openEditModal(id) {
@@ -1801,6 +2493,8 @@
       document.getElementById('cust-phone').value = customer.phone || '';
       document.getElementById('cust-email').value = customer.email || '';
       document.getElementById('cust-address').value = customer.address || '';
+      const gstinEl = document.getElementById('cust-gstin');
+      if (gstinEl) gstinEl.value = customer.gstin || '';
       Modal.open('modal-customer');
     },
     async saveCustomer() {
@@ -1808,6 +2502,7 @@
       const phone = document.getElementById('cust-phone').value.trim();
       const email = document.getElementById('cust-email').value.trim();
       const address = document.getElementById('cust-address').value.trim();
+      const gstin = (document.getElementById('cust-gstin')?.value || '').trim().toUpperCase();
 
       if (!name) {
         Toast.show('Customer name is required', 'error');
@@ -1824,7 +2519,7 @@
         if (AuthController.isAuthenticated()) {
           const activeBizId = AuthController.getActiveBusinessId();
           try {
-            const res = await ApiClient.updateCustomer(activeBizId, this.editingId, { name, phone, email, address });
+            const res = await ApiClient.updateCustomer(activeBizId, this.editingId, { name, phone, email, address, gstin });
             if (res.customer) {
               const norm = Normalizer.customer(res.customer);
               const idx = customers.findIndex(c => c.id === this.editingId);
@@ -1842,7 +2537,7 @@
         }
         const index = customers.findIndex(c => c.id === this.editingId);
         if (index !== -1) {
-          customers[index] = { ...customers[index], name, phone, email, address };
+          customers[index] = { ...customers[index], name, phone, email, address, gstin };
           Store.saveCustomers(customers);
           Toast.show('Customer updated successfully', 'success');
         }
@@ -1850,7 +2545,7 @@
         if (AuthController.isAuthenticated()) {
           const activeBizId = AuthController.getActiveBusinessId();
           try {
-            const res = await ApiClient.createCustomer(activeBizId, { name, phone, email, address });
+            const res = await ApiClient.createCustomer(activeBizId, { name, phone, email, address, gstin });
             if (res.customer) {
               const norm = Normalizer.customer(res.customer);
               customers.push(norm);
@@ -1871,6 +2566,7 @@
           phone,
           email,
           address,
+          gstin,
           createdAt: Utils.todayYMD()
         };
         customers.push(newCustomer);
@@ -2524,11 +3220,13 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
       const nameInput = document.getElementById('inv-customer-name');
       const phoneInput = document.getElementById('inv-customer-phone');
       const addressInput = document.getElementById('inv-customer-address');
+      const gstinInput = document.getElementById('inv-customer-gstin');
 
       if (customer) {
         if (nameInput) nameInput.value = customer.name;
         if (phoneInput) phoneInput.value = customer.phone;
         if (addressInput) addressInput.value = customer.address || '';
+        if (gstinInput) gstinInput.value = customer.gstin || '';
       }
       this.recalculate();
     },
@@ -2658,6 +3356,9 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
       const custAddress = document.getElementById('inv-customer-address');
       if (custAddress) custAddress.value = '';
 
+      const custGstin = document.getElementById('inv-customer-gstin');
+      if (custGstin) custGstin.value = '';
+
       const discountVal = document.getElementById('inv-discount-value');
       if (discountVal) discountVal.value = '0';
 
@@ -2722,6 +3423,8 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
       document.getElementById('inv-customer-name').value = inv.customerName || '';
       document.getElementById('inv-customer-phone').value = inv.customerPhone || '';
       document.getElementById('inv-customer-address').value = inv.customerAddress || '';
+      const gstinInput = document.getElementById('inv-customer-gstin');
+      if (gstinInput) gstinInput.value = inv.customerGstin || '';
 
       document.getElementById('inv-discount-value').value = inv.discountValue || 0;
       document.getElementById('inv-discount-type').value = inv.discountType || 'percent';
@@ -2772,6 +3475,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
       const customerName = document.getElementById('inv-customer-name').value.trim();
       const customerPhone = document.getElementById('inv-customer-phone').value.trim();
       const customerAddress = document.getElementById('inv-customer-address').value.trim();
+      const customerGstin = (document.getElementById('inv-customer-gstin')?.value || '').trim().toUpperCase();
 
       // Collect line items with strict quantity checks
       const rows = document.querySelectorAll('#line-items-tbody .line-item-row');
@@ -2881,6 +3585,7 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
         customerName,
         customerPhone,
         customerAddress,
+        customerGstin,
         items,
         subtotal,
         discountType,
@@ -4862,6 +5567,8 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
   window.SalesAnalysisController = SalesAnalysisController;
   window.ThemeManager = ThemeManager;
   window.UdhaarKhataController = UdhaarKhataController;
+  window.LowStockController = LowStockController;
+  window.GstReportController = GstReportController;
 
   // --- BOOTSTRAP APP ON DOM READY ---
   document.addEventListener('DOMContentLoaded', () => {
@@ -4883,8 +5590,11 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
     AiBillingController.init();
     ThermalReceiptController.init();
     SalesAnalysisController.init();
+    LowStockController.init();
+    GstReportController.init();
     DashboardController.render();
     SalesAnalysisController.render();
+    LowStockController.render();
   });
 
 })();
