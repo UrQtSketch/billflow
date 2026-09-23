@@ -38,7 +38,7 @@ module.exports = async function handler(req, res) {
       const todaySales = todayInvoices.reduce((sum, i) => sum + parseFloat(i.grand_total || 0), 0);
       const totalPaid = invoices.reduce((sum, i) => sum + parseFloat(i.paid_amount || 0), 0);
       const totalPending = invoices.reduce((sum, i) => sum + parseFloat(i.balance_due || 0), 0);
-      const lowStockProducts = products.filter(p => p.type === 'product' && (parseInt(p.stock, 10) || 0) < 10);
+      const lowStockProducts = products.filter(p => p.type === 'product' && (parseInt(p.stock, 10) || 0) <= 10);
 
       return sendJson(res, 200, {
         stats: {
@@ -64,7 +64,7 @@ module.exports = async function handler(req, res) {
       const todaySales = todayInvoices.reduce((sum, i) => sum + (parseFloat(i.grand_total) || 0), 0);
       const totalPaid = invoices.reduce((sum, i) => sum + (parseFloat(i.paid_amount) || 0), 0);
       const totalPending = invoices.reduce((sum, i) => sum + (parseFloat(i.balance_due) || 0), 0);
-      const lowStockProducts = products.filter(p => p.type === 'product' && (p.stock || 0) < 10);
+      const lowStockProducts = products.filter(p => p.type === 'product' && (p.stock || 0) <= 10);
 
       return sendJson(res, 200, {
         stats: {

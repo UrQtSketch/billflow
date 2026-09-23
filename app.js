@@ -510,6 +510,21 @@
     async fetchAnalytics(businessId, range = '7days') {
       const res = await fetch(`/api/analytics?businessId=${encodeURIComponent(businessId)}&range=${encodeURIComponent(range)}&date=${encodeURIComponent(Utils.todayYMD())}`);
       return res.json();
+    },
+    async syncInvoices(businessId, invoices) {
+      if (!Array.isArray(invoices)) return { success: true };
+      const results = [];
+      for (const inv of invoices) {
+        if (inv && inv.id) {
+          try {
+            const res = await this.updateInvoice(businessId, inv.id, inv);
+            results.push(res);
+          } catch (e) {
+            // Ignore single invoice sync error during batch
+          }
+        }
+      }
+      return { success: true, count: results.length };
     }
   };
 
@@ -583,6 +598,7 @@
     open(modalId) {
       const modal = document.getElementById(modalId);
       if (modal) {
+        modal.style.display = 'flex';
         modal.classList.add('show');
         document.body.style.overflow = 'hidden';
       }
@@ -591,6 +607,7 @@
       const modal = document.getElementById(modalId);
       if (modal) {
         modal.classList.remove('show');
+        modal.style.display = 'none';
         document.body.style.overflow = '';
       }
       if (modalId === 'modal-product' && typeof ProductController !== 'undefined') {
@@ -601,7 +618,10 @@
       }
     },
     closeAll() {
-      document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.remove('show'));
+      document.querySelectorAll('.modal-backdrop').forEach(m => {
+        m.classList.remove('show');
+        m.style.display = 'none';
+      });
       document.body.style.overflow = '';
       if (typeof ProductController !== 'undefined') ProductController.editingId = null;
       if (typeof CustomerController !== 'undefined') CustomerController.editingId = null;
@@ -614,6 +634,9 @@
   // --- NAVIGATION CONTROLLER ---
   const Navigation = {
     currentView: 'dashboard',
+    showView(viewName) {
+      return this.switchView(viewName);
+    },
     init() {
       // Bind both desktop sidebar buttons and mobile bottom navigation items
       document.querySelectorAll('.nav button[data-view], .mobile-bottom-nav button[data-view]').forEach(btn => {
@@ -675,6 +698,10 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
+  window.Navigation = Navigation;
+  window.switchView = (viewName) => Navigation.switchView(viewName);
+  window.showView = (viewName) => Navigation.switchView(viewName);
 
   // --- DASHBOARD CONTROLLER ---
   const DashboardController = {
@@ -5353,12 +5380,25 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
       return;
     }
 
-    // On laptop and desktop screens: keep sidebar permanently visible and open
-    document.body.classList.remove('sidebar-collapsed');
+    // On laptop and desktop screens: toggle sidebar-collapsed state
+    let isCollapsed;
+    if (typeof forceState === 'boolean') {
+      isCollapsed = !forceState;
+      if (isCollapsed) document.body.classList.add('sidebar-collapsed');
+      else document.body.classList.remove('sidebar-collapsed');
+    } else {
+      isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+    }
+
     if (sidebar) sidebar.classList.remove('open');
     if (backdrop) backdrop.classList.remove('show');
     document.body.style.overflow = '';
-    localStorage.removeItem('billflow_sidebar_collapsed');
+
+    if (isCollapsed) {
+      localStorage.setItem('billflow_sidebar_collapsed', 'true');
+    } else {
+      localStorage.removeItem('billflow_sidebar_collapsed');
+    }
   };
 
   window.toggleMenu = function () {
@@ -5571,12 +5611,20 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
   window.GstReportController = GstReportController;
 
   // --- BOOTSTRAP APP ON DOM READY ---
-  document.addEventListener('DOMContentLoaded', () => {
+  function bootApp() {
     ThemeManager.init();
 
-    // Ensure on laptop / desktop screen the full sidebar is always open and never collapsed
-    document.body.classList.remove('sidebar-collapsed');
-    localStorage.removeItem('billflow_sidebar_collapsed');
+    // On desktop / laptop, restore saved sidebar collapsed state if previously toggled
+    if (window.innerWidth > 768) {
+      const isCollapsed = localStorage.getItem('billflow_sidebar_collapsed') === 'true';
+      if (isCollapsed) {
+        document.body.classList.add('sidebar-collapsed');
+      } else {
+        document.body.classList.remove('sidebar-collapsed');
+      }
+    } else {
+      document.body.classList.remove('sidebar-collapsed');
+    }
 
     Navigation.init();
     AuthController.init();
@@ -5595,6 +5643,12 @@ Payment ho jane ke baad kripya screenshot bhej dein. Dhanyawaad! 🙏`;
     DashboardController.render();
     SalesAnalysisController.render();
     LowStockController.render();
-  });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootApp);
+  } else {
+    bootApp();
+  }
 
 })();

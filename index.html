@@ -193,7 +193,7 @@
                 <p class="muted" style="margin:4px 0 0;font-size:13px">नीचे दिए गए सामान का स्टॉक 10 या उससे कम बचा है। समय पर नया स्टॉक मंगवाएं।</p>
               </div>
             </div>
-            <button type="button" class="btn btn-sm" onclick="document.querySelector('.nav button[data-view=products]').click()" style="background:#fef2f2;border-color:#fca5a5;color:#b91c1c;font-weight:600">📦 Manage Inventory</button>
+            <button type="button" class="btn btn-sm" onclick="window.switchView('products')" style="background:#fef2f2;border-color:#fca5a5;color:#b91c1c;font-weight:600">📦 Manage Inventory</button>
           </div>
           <div id="dashboard-low-stock-container" class="low-stock-grid" style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">
             <!-- Dynamically populated low stock cards -->
@@ -207,7 +207,7 @@
               <h2>Recent invoices</h2>
               <span class="muted">Your latest billing activity</span>
             </div>
-            <button class="btn" onclick="document.querySelector('.nav button[data-view=invoices]').click()">View all</button>
+            <button class="btn" onclick="window.switchView('invoices')">View all</button>
           </div>
           <div class="table-container">
             <table class="invoice-list">
@@ -732,7 +732,7 @@
               <h2>Invoice History</h2>
               <span class="muted">Browse, manage, and filter all issued invoices</span>
             </div>
-            <button class="btn primary" onclick="document.querySelector('.nav button[data-view=create-invoice]').click()">＋ Create Invoice</button>
+            <button class="btn primary" onclick="window.switchView('create-invoice')">＋ Create Invoice</button>
           </div>
 
           <div class="toolbar" style="flex-wrap:wrap;gap:10px">
@@ -976,7 +976,7 @@
                   <span class="muted" style="font-size:12px">कुछ सामानों का स्टॉक 10 या उससे कम बचा है। बिक्री बाधित होने से पहले पुनः स्टॉक करें।</span>
                 </div>
               </div>
-              <button type="button" class="btn btn-sm" onclick="document.querySelector('.nav button[data-view=products]').click()" style="background:#fffbeb;border-color:#fcd34d;color:#b45309;font-weight:600">⚡ Manage Stock</button>
+              <button type="button" class="btn btn-sm" onclick="window.switchView('products')" style="background:#fffbeb;border-color:#fcd34d;color:#b45309;font-weight:600">⚡ Manage Stock</button>
             </div>
             <div id="analysis-low-stock-container" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px">
               <!-- Dynamically populated low stock pills -->
@@ -1461,7 +1461,7 @@
   </div>
 
   <!-- MODAL: THERMAL POS RECEIPT PRINTER (80mm / 58mm छोटा पर्ची प्रिंट) -->
-  <div class="modal-backdrop" id="modal-thermal-receipt" style="display:none">
+  <div class="modal-backdrop" id="modal-thermal-receipt">
     <div class="modal modal-thermal">
       <div class="modal-header">
         <div style="display:flex;align-items:center;gap:8px">
@@ -1503,7 +1503,7 @@
   </div>
 
   <!-- MODAL: PAYMENT REMINDER & UPI QR (उधारी तकादा व UPI QR) -->
-  <div class="modal-backdrop" id="modal-payment-reminder" style="display:none">
+  <div class="modal-backdrop" id="modal-payment-reminder">
     <div class="modal-dialog modal-lg">
       <div class="modal-header">
         <div>
@@ -1574,7 +1574,7 @@
   </div>
 
   <!-- MODAL: RECORD PAYMENT / KHATA SETTLEMENT -->
-  <div class="modal-backdrop" id="modal-record-payment" style="display:none">
+  <div class="modal-backdrop" id="modal-record-payment">
     <div class="modal-dialog">
       <div class="modal-header">
         <div>
@@ -1635,7 +1635,7 @@
   </div>
 
   <!-- MODAL: MONTHLY GST & CA REPORT (GSTR-1 READY) -->
-  <div class="modal-backdrop" id="modal-gst-report" style="display:none">
+  <div class="modal-backdrop" id="modal-gst-report">
     <div class="modal-dialog modal-xl" style="max-width:960px">
       <div class="modal-header">
         <div>

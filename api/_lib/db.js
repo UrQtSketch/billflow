@@ -61,12 +61,15 @@ async function initSchema() {
       phone VARCHAR(30),
       address TEXT,
       gstin VARCHAR(30),
+      upi_id VARCHAR(100),
       invoice_prefix VARCHAR(10) DEFAULT 'INV-',
       next_number INT DEFAULT 1001,
       currency VARCHAR(5) DEFAULT '₹',
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
+
+    ALTER TABLE businesses ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100);
 
     CREATE TABLE IF NOT EXISTS products (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -91,9 +94,12 @@ async function initSchema() {
       phone VARCHAR(30),
       email VARCHAR(255),
       address TEXT,
+      gstin VARCHAR(30),
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
+
+    ALTER TABLE customers ADD COLUMN IF NOT EXISTS gstin VARCHAR(30);
 
     CREATE TABLE IF NOT EXISTS invoices (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -104,6 +110,7 @@ async function initSchema() {
       customer_phone VARCHAR(30),
       customer_email VARCHAR(255),
       customer_address TEXT,
+      customer_gstin VARCHAR(30),
       invoice_date DATE NOT NULL,
       due_date DATE,
       subtotal DECIMAL(12,2) NOT NULL,
@@ -122,6 +129,8 @@ async function initSchema() {
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT unique_business_invoice_number UNIQUE (business_id, invoice_number)
     );
+
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_gstin VARCHAR(30);
 
     CREATE TABLE IF NOT EXISTS invoice_items (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

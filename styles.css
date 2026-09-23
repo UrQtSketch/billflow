@@ -339,7 +339,7 @@ button, input, select, textarea {
 }
 
 .btn-sidebar-toggle {
-  display: none; /* Hidden on laptop/desktop: sidebar is permanent */
+  display: inline-flex;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #cbd5e1;
@@ -361,7 +361,7 @@ button, input, select, textarea {
 }
 
 .btn-sidebar-toggle-main {
-  display: none; /* Hidden on laptop/desktop: full menu is already visible on left */
+  display: none;
   font-size: 20px;
   font-weight: 900;
   padding: 7px 12px;
@@ -370,6 +370,10 @@ button, input, select, textarea {
   border-radius: 9px;
   align-items: center;
   justify-content: center;
+}
+
+body.sidebar-collapsed .btn-sidebar-toggle-main {
+  display: inline-flex !important;
 }
 
 .nav {
@@ -1006,8 +1010,9 @@ body.sidebar-collapsed .main {
 }
 
 .modal-backdrop.show {
-  opacity: 1;
-  pointer-events: auto;
+  display: flex !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 .modal-dialog {
@@ -1164,35 +1169,43 @@ body.sidebar-collapsed .main {
 
 /* --- LAPTOP & DESKTOP SCREENS (1024px and wider) --- */
 @media (min-width: 1024px) {
-  /* Hide all 3-dot hamburger buttons on desktop: the full sidebar is permanent */
-  .btn-sidebar-toggle,
+  .btn-sidebar-toggle {
+    display: inline-flex !important;
+  }
+
   .btn-sidebar-toggle-main {
-    display: none !important;
+    display: none;
+  }
+
+  body.sidebar-collapsed .btn-sidebar-toggle-main {
+    display: inline-flex !important;
   }
 
   .sidebar {
     position: fixed !important;
     inset: 0 auto 0 0 !important;
     width: 245px !important;
-    transform: none !important;
+    transform: translateX(0);
     display: flex !important;
     z-index: 100 !important;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .main {
     margin-left: 245px !important;
     width: calc(100% - 245px) !important;
     padding: 28px 36px !important;
+    transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* Prevent any collapsed sidebar state on desktop/laptop */
+  /* Support collapsed sidebar state on desktop/laptop */
   body.sidebar-collapsed .sidebar {
-    transform: none !important;
+    transform: translateX(-100%) !important;
   }
 
   body.sidebar-collapsed .main {
-    margin-left: 245px !important;
-    width: calc(100% - 245px) !important;
+    margin-left: 0 !important;
+    width: 100% !important;
   }
 
   .sidebar-backdrop,
@@ -1234,32 +1247,41 @@ body.sidebar-collapsed .main {
 
 /* --- TABLET SCREENS (769px to 1023px) --- */
 @media (min-width: 769px) and (max-width: 1023px) {
-  .btn-sidebar-toggle,
+  .btn-sidebar-toggle {
+    display: inline-flex !important;
+  }
+
   .btn-sidebar-toggle-main {
-    display: none !important;
+    display: none;
+  }
+
+  body.sidebar-collapsed .btn-sidebar-toggle-main {
+    display: inline-flex !important;
   }
 
   .sidebar {
     position: fixed !important;
     inset: 0 auto 0 0 !important;
     width: 220px !important;
-    transform: none !important;
+    transform: translateX(0);
     display: flex !important;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .main {
     margin-left: 220px !important;
     width: calc(100% - 220px) !important;
     padding: 20px !important;
+    transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   body.sidebar-collapsed .sidebar {
-    transform: none !important;
+    transform: translateX(-100%) !important;
   }
 
   body.sidebar-collapsed .main {
-    margin-left: 220px !important;
-    width: calc(100% - 220px) !important;
+    margin-left: 0 !important;
+    width: 100% !important;
   }
 
   .sidebar-backdrop,

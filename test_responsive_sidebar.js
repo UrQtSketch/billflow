@@ -19,33 +19,29 @@ function check(desc, condition) {
   }
 }
 
-// Check 1: In base styles, 3-dot buttons are hidden by default
+// Check 1: In base styles, sidebar toggle buttons
+const btnSidebarBaseMatch = stylesCss.match(/\.btn-sidebar-toggle\s*\{[^}]*display:\s*inline-flex/);
+check('Base style displays .btn-sidebar-toggle for collapsing menu', !!btnSidebarBaseMatch);
+
 const btnMainBaseMatch = stylesCss.match(/\.btn-sidebar-toggle-main\s*\{[^}]*display:\s*none/);
-check('Base style hides .btn-sidebar-toggle-main on desktop', !!btnMainBaseMatch);
+check('Base style hides .btn-sidebar-toggle-main when sidebar already open', !!btnMainBaseMatch);
 
-const btnSidebarBaseMatch = stylesCss.match(/\.btn-sidebar-toggle\s*\{[^}]*display:\s*none/);
-check('Base style hides .btn-sidebar-toggle on desktop', !!btnSidebarBaseMatch);
+// Check 2: When sidebar is collapsed on desktop, expand button is visible
+const collapsedMainBtnMatch = stylesCss.match(/body\.sidebar-collapsed\s+\.btn-sidebar-toggle-main\s*\{[^}]*display:\s*inline-flex\s*!important/);
+check('Collapsed sidebar displays .btn-sidebar-toggle-main so user can reopen', !!collapsedMainBtnMatch);
 
-// Check 2: In @media (min-width: 1024px), 3-dot buttons are explicitly display: none !important
+// Check 3: In @media (min-width: 1024px), sidebar and main layout
 const desktopSection = stylesCss.match(/@media\s*\(min-width:\s*1024px\)[\s\S]*?\n\}/);
 if (desktopSection) {
-  check('Desktop @media (min-width: 1024px) hides 3-dot buttons', desktopSection[0].includes('display: none !important'));
-  check('Desktop @media (min-width: 1024px) keeps sidebar permanent', desktopSection[0].includes('transform: none !important'));
+  check('Desktop @media (min-width: 1024px) supports toggle button', desktopSection[0].includes('.btn-sidebar-toggle'));
+  check('Desktop @media (min-width: 1024px) positions sidebar fixed', desktopSection[0].includes('position: fixed !important'));
   check('Desktop @media (min-width: 1024px) sets main margin-left: 245px', desktopSection[0].includes('margin-left: 245px !important'));
+  check('Desktop supports collapsed sidebar state', desktopSection[0].includes('body.sidebar-collapsed .sidebar'));
 } else {
   check('Desktop @media (min-width: 1024px) section exists', false);
 }
 
-// Check 3: In @media (min-width: 769px), 3-dot buttons are also hidden
-const tabletSection = stylesCss.match(/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1023px\)[\s\S]*?\n\}/);
-if (tabletSection) {
-  check('Tablet/Laptop landscape hides 3-dot buttons', tabletSection[0].includes('display: none !important'));
-  check('Tablet/Laptop landscape keeps sidebar permanent', tabletSection[0].includes('transform: none !important'));
-} else {
-  check('Tablet @media (min-width: 769px) section exists', false);
-}
-
-// Check 4: In @media (max-width: 768px), 3-dot button is shown for mobile phone drawer
+// Check 4: In @media (max-width: 768px), mobile drawer and bottom nav
 const mobileSection = stylesCss.match(/@media\s*\(max-width:\s*768px\)[\s\S]*?\n\/\* --- EXTRA SMALL/);
 if (mobileSection) {
   check('Mobile @media (max-width: 768px) shows 3-dot button for mobile drawer', mobileSection[0].includes('.btn-sidebar-toggle-main') && mobileSection[0].includes('display: inline-flex !important'));

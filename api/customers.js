@@ -93,14 +93,14 @@ module.exports = async function handler(req, res) {
   // POST Create Customer
   if (req.method === 'POST') {
     try {
-      const { name, phone, email, address } = body || {};
+      const { name, phone, email, address, gstin } = body || {};
       if (!name || !name.trim()) return sendError(res, 400, 'Customer name is required');
-      const cleanName = name.trim(), cleanPhone = phone || 'N/A', cleanEmail = email || '', cleanAddress = address || '';
+      const cleanName = name.trim(), cleanPhone = phone || 'N/A', cleanEmail = email || '', cleanAddress = address || '', cleanGstin = (gstin || '').trim().toUpperCase();
 
       if (pool) {
         const ins = await query(
-          'INSERT INTO customers (business_id, name, phone, email, address) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-          [businessId, cleanName, cleanPhone, cleanEmail, cleanAddress]
+          'INSERT INTO customers (business_id, name, phone, email, address, gstin) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+          [businessId, cleanName, cleanPhone, cleanEmail, cleanAddress, cleanGstin]
         );
         return sendJson(res, 201, { message: 'Customer created', customer: ins.rows[0] });
       } else {
@@ -111,6 +111,7 @@ module.exports = async function handler(req, res) {
           phone: cleanPhone,
           email: cleanEmail,
           address: cleanAddress,
+          gstin: cleanGstin,
           created_at: new Date().toISOString()
         };
         memoryStore.customers.push(cust);
@@ -124,14 +125,15 @@ module.exports = async function handler(req, res) {
   // PUT Update Customer
   if (req.method === 'PUT' && id) {
     try {
-      const { name, phone, email, address } = body || {};
+      const { name, phone, email, address, gstin } = body || {};
+      const cleanGstin = gstin !== undefined ? (gstin || '').trim().toUpperCase() : undefined;
       if (pool) {
         const upd = await query(
           `UPDATE customers
            SET name = COALESCE($1, name), phone = COALESCE($2, phone), email = COALESCE($3, email),
-               address = COALESCE($4, address), updated_at = CURRENT_TIMESTAMP
-           WHERE id = $5 AND business_id = $6 RETURNING *`,
-          [name, phone, email, address, id, businessId]
+               address = COALESCE($4, address), gstin = COALESCE($5, gstin), updated_at = CURRENT_TIMESTAMP
+           WHERE id = $6 AND business_id = $7 RETURNING *`,
+          [name, phone, email, address, cleanGstin, id, businessId]
         );
         if (!upd || upd.rows.length === 0) return sendError(res, 404, 'Customer not found');
         return sendJson(res, 200, { message: 'Customer updated', customer: upd.rows[0] });
@@ -142,6 +144,7 @@ module.exports = async function handler(req, res) {
         if (phone !== undefined) c.phone = phone;
         if (email !== undefined) c.email = email;
         if (address !== undefined) c.address = address;
+        if (cleanGstin !== undefined) c.gstin = cleanGstin;
         return sendJson(res, 200, { message: 'Customer updated', customer: c });
       }
     } catch (err) {

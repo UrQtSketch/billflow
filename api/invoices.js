@@ -86,12 +86,14 @@ module.exports = async function handler(req, res) {
     try {
       const {
         invoiceNumber, customerId, customerName, customerPhone, customerEmail, customerAddress,
+        customerGstin, customer_gstin,
         date, dueDate, items, discountType, discountValue, taxRate, paymentMethod, paymentStatus, paidAmount, notes
       } = body || {};
 
       if (!customerName || !customerName.trim()) return sendError(res, 400, 'Something is not good: Customer name is required (कस्टमर का नाम आवश्यक है)');
       if (!items || !Array.isArray(items) || items.length === 0) return sendError(res, 400, 'Something is not good: At least one line item is required (कम से कम 1 आइटम जरूरी है)');
 
+      const cleanCustGstin = (customerGstin || customer_gstin || '').trim().toUpperCase();
       let subtotal = 0;
       const validatedItems = [];
       for (const item of items) {
@@ -140,12 +142,12 @@ module.exports = async function handler(req, res) {
 
           const invRes = await client.query(
             `INSERT INTO invoices (
-               business_id, customer_id, invoice_number, customer_name, customer_phone, customer_email, customer_address,
+               business_id, customer_id, invoice_number, customer_name, customer_phone, customer_email, customer_address, customer_gstin,
                invoice_date, due_date, subtotal, discount_type, discount_value, discount_amount, tax_rate, tax_amount,
                grand_total, payment_method, payment_status, paid_amount, balance_due, notes
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING *`,
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) RETURNING *`,
             [
-              businessId, customerId || null, invoiceNumber, customerName, customerPhone || '', customerEmail || '', customerAddress || '',
+              businessId, customerId || null, invoiceNumber, customerName, customerPhone || '', customerEmail || '', customerAddress || '', cleanCustGstin,
               date || new Date().toISOString().split('T')[0], dueDate || null, subtotal, cleanDiscType, cleanDiscVal, discountAmount,
               cleanTaxRate, taxAmount, grandTotal, paymentMethod || 'Cash', cleanStatus, cleanPaid, balanceDue, notes || ''
             ]
@@ -185,6 +187,8 @@ module.exports = async function handler(req, res) {
           customer_phone: customerPhone || '',
           customer_email: customerEmail || '',
           customer_address: customerAddress || '',
+          customer_gstin: cleanCustGstin,
+          customerGstin: cleanCustGstin,
           invoice_date: date || new Date().toISOString().split('T')[0],
           due_date: dueDate || null,
           subtotal,
@@ -224,11 +228,13 @@ module.exports = async function handler(req, res) {
     try {
       const {
         customerId, customerName, customerPhone, customerEmail, customerAddress,
+        customerGstin, customer_gstin,
         date, dueDate, items, discountType, discountValue, taxRate, paymentMethod, paymentStatus, paidAmount, notes
       } = body || {};
 
       if (!items || !Array.isArray(items) || items.length === 0) return sendError(res, 400, 'At least one line item is required');
 
+      const cleanCustGstin = customerGstin !== undefined ? (customerGstin || '').trim().toUpperCase() : (customer_gstin !== undefined ? (customer_gstin || '').trim().toUpperCase() : undefined);
       let subtotal = 0;
       const validatedItems = [];
       for (const item of items) {
@@ -291,14 +297,14 @@ module.exports = async function handler(req, res) {
           const invRes = await client.query(
             `UPDATE invoices
              SET customer_id = $1, customer_name = COALESCE($2, customer_name), customer_phone = $3,
-                 customer_email = $4, customer_address = $5, invoice_date = COALESCE($6, invoice_date),
-                 due_date = $7, subtotal = $8, discount_type = $9, discount_value = $10,
-                 discount_amount = $11, tax_rate = $12, tax_amount = $13, grand_total = $14,
-                 payment_method = $15, payment_status = $16, paid_amount = $17, balance_due = $18,
-                 notes = $19, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $20 AND business_id = $21 RETURNING *`,
+                 customer_email = $4, customer_address = $5, customer_gstin = COALESCE($6, customer_gstin), invoice_date = COALESCE($7, invoice_date),
+                 due_date = $8, subtotal = $9, discount_type = $10, discount_value = $11,
+                 discount_amount = $12, tax_rate = $13, tax_amount = $14, grand_total = $15,
+                 payment_method = $16, payment_status = $17, paid_amount = $18, balance_due = $19,
+                 notes = $20, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $21 AND business_id = $22 RETURNING *`,
             [
-              customerId || null, customerName, customerPhone || '', customerEmail || '', customerAddress || '',
+              customerId || null, customerName, customerPhone || '', customerEmail || '', customerAddress || '', cleanCustGstin,
               date, dueDate || null, subtotal, cleanDiscType, cleanDiscVal, discountAmount,
               cleanTaxRate, taxAmount, grandTotal, paymentMethod || 'Cash', cleanStatus, cleanPaid, balanceDue,
               notes || '', id, businessId
@@ -357,6 +363,8 @@ module.exports = async function handler(req, res) {
           customer_phone: customerPhone || '',
           customer_email: customerEmail || '',
           customer_address: customerAddress || '',
+          customer_gstin: cleanCustGstin !== undefined ? cleanCustGstin : oldInv.customer_gstin,
+          customerGstin: cleanCustGstin !== undefined ? cleanCustGstin : (oldInv.customerGstin || oldInv.customer_gstin),
           invoice_date: date || oldInv.invoice_date,
           due_date: dueDate || null,
           subtotal,
